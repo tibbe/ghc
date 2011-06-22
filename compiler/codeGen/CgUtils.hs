@@ -61,6 +61,8 @@ import Id
 import IdInfo
 import Constants
 import SMRep
+import CmmNode (wrapRecExp)
+import CmmOpt
 import OldCmm
 import OldCmmUtils
 import CLabel
@@ -601,17 +603,26 @@ assignTemp e
 			    ; stmtC (CmmAssign (CmmLocal reg) e)
 			    ; return (CmmReg (CmmLocal reg)) }
 
--- | If the expression is trivial and doesn't refer to a global
--- register, return it.  Otherwise, assign the expression to a
--- temporary register and return an expression referring to this
--- register.
+-- TODO: assingTemp_ might be to specialized to be here and should
+-- probably be moved to the use site.
+
+-- | If the expression is trivial or can be constant folded to a
+-- trivial expression and if it doesn't refer to a global register,
+-- return it (possibly constant folded).  Otherwise, assign the
+-- expression to a temporary register and return an expression
+-- referring to this register.
 assignTemp_ :: CmmExpr -> FCode CmmExpr
-assignTemp_ e
+assignTemp_ e0
     | isTrivialCmmExpr e && hasNoGlobalRegs e = return e
     | otherwise = do
         reg <- newTemp (cmmExprType e)
         stmtC (CmmAssign (CmmLocal reg) e)
         return (CmmReg (CmmLocal reg))
+  where
+    -- We might need to fold multiple times to expose a constant.
+    e = wrapRecExp foldExp e0
+    foldExp (CmmMachOp op args) = cmmMachOpFold op args
+    foldExp e = e
 
 newTemp :: CmmType -> FCode LocalReg
 newTemp rep = do { uniq <- newUnique; return (LocalReg uniq rep) }

@@ -744,7 +744,7 @@ emitCopyArray copy src0 src_off0 dst0 dst_off0 n0 live = do
     dst_elems_p <- assignTemp $ cmmOffsetB dst arrPtrsHdrSize
     dst_p <- assignTemp $ cmmOffsetExprW dst_elems_p dst_off
     src_p <- assignTemp $ cmmOffsetExprW (cmmOffsetB src arrPtrsHdrSize) src_off
-    bytes <- assignTemp $ cmmMulWord n (CmmLit (mkIntCLit wORD_SIZE))
+    bytes <- assignTemp_ $ cmmMulWord n (CmmLit (mkIntCLit wORD_SIZE))
 
     copy src dst dst_p src_p bytes live
 
@@ -766,11 +766,11 @@ emitCloneArray info_p res_r src0 src_off0 n0 live = do
     src_off <- assignTemp_ src_off0
     n <- assignTemp_ n0
 
-    card_words <- assignTemp $ (n `cmmUShrWord`
-                                (CmmLit (mkIntCLit mUT_ARR_PTRS_CARD_BITS)))
+    card_words <- assignTemp_ $ (n `cmmUShrWord`
+                                 (CmmLit (mkIntCLit mUT_ARR_PTRS_CARD_BITS)))
                   `cmmAddWord` CmmLit (mkIntCLit 1)
-    size <- assignTemp $ n `cmmAddWord` card_words
-    words <- assignTemp $ arrPtrsHdrSizeW `cmmAddWord` size
+    size <- assignTemp_ $ n `cmmAddWord` card_words
+    words <- assignTemp_ $ arrPtrsHdrSizeW `cmmAddWord` size
 
     arr_r <- newTemp bWord
     emitAllocateCall arr_r myCapability words live
@@ -809,7 +809,7 @@ emitCloneArray info_p res_r src0 src_off0 n0 live = do
 -- number of cards).  Marks the relevant cards as dirty.
 emitSetCards :: CmmExpr -> CmmExpr -> CmmExpr -> StgLiveVars -> Code
 emitSetCards dst_start dst_cards_start n live = do
-    start_card <- assignTemp $ card dst_start
+    start_card <- assignTemp_ $ card dst_start
     emitMemsetCall (dst_cards_start `cmmAddWord` start_card)
         (CmmLit (mkIntCLit 1))
         ((card (dst_start `cmmAddWord` n) `cmmSubWord` start_card)
