@@ -130,6 +130,7 @@ getCoreToDo dflags
     static_args   = dopt Opt_StaticArgumentTransformation dflags
     rules_on      = dopt Opt_EnableRewriteRules           dflags
     eta_expand_on = dopt Opt_DoLambdaEtaExpansion         dflags
+    do_spec_after = dopt Opt_SpecialiseAfter              dflags
 
     maybe_rule_check phase = runMaybe rule_check (CoreDoRuleCheck phase)
 
@@ -291,6 +292,10 @@ getCoreToDo dflags
             ]),         -- Run the simplifier after LiberateCase to vastly
                         -- reduce the possiblility of shadowing
                         -- Reason: see Note [Shadowing] in SpecConstr.lhs
+
+        runWhen do_spec_after CoreDoSpecialising,
+                -- Specialise once more as inlining might have exposed more
+                -- opportunities for specialising.
 
         runWhen spec_constr CoreDoSpecConstr,
 

@@ -282,6 +282,7 @@ data DynFlag
    | Opt_IrrefutableTuples
    | Opt_CmmSink
    | Opt_CmmElimCommonBlocks
+   | Opt_SpecialiseAfter
 
    -- Interface files
    | Opt_IgnoreInterfacePragmas
@@ -2226,6 +2227,7 @@ fFlags = [
   ( "print-explicit-foralls",           Opt_PrintExplicitForalls, nop ),
   ( "strictness",                       Opt_Strictness, nop ),
   ( "specialise",                       Opt_Specialise, nop ),
+  ( "specialise-after",                 Opt_SpecialiseAfter, nop ),
   ( "float-in",                         Opt_FloatIn, nop ),
   ( "static-argument-transformation",   Opt_StaticArgumentTransformation, nop ),
   ( "full-laziness",                    Opt_FullLaziness, nop ),
