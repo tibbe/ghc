@@ -257,6 +257,10 @@ getCoreToDo dflags
                 -- Don't stop now!
         simpl_phase 0 ["main"] (max max_iter 3),
 
+        runWhen do_spec_after CoreDoSpecialising,
+        -- Specialise after inlining in case we have exposed so some
+        -- monomorphic call sites.
+
         runWhen strictness (CoreDoPasses [
                 CoreDoStrictness,
                 CoreDoWorkerWrapper,
@@ -292,10 +296,6 @@ getCoreToDo dflags
             ]),         -- Run the simplifier after LiberateCase to vastly
                         -- reduce the possiblility of shadowing
                         -- Reason: see Note [Shadowing] in SpecConstr.lhs
-
-        runWhen do_spec_after CoreDoSpecialising,
-                -- Specialise once more as inlining might have exposed more
-                -- opportunities for specialising.
 
         runWhen spec_constr CoreDoSpecConstr,
 

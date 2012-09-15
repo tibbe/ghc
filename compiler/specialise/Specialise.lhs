@@ -571,14 +571,17 @@ specProgram dflags guts
              rule_base = extendRuleBaseList hpt_rules (mg_rules guts)
 
              -- Specialise the bindings of this module
-       ; (binds', uds) <- runSpecM dflags (go (mg_binds guts))
+       ; ((binds', uds), count) <- runSpecM dflags (go (mg_binds guts))
 
              -- Specialise imported functions
-       ; (new_rules, spec_binds) <- specImports dflags emptyVarSet rule_base uds
+       ; (new_rules, spec_binds, count') <- specImports dflags emptyVarSet rule_base uds
 
        ; let final_binds | null spec_binds = binds'
                          | otherwise       = Rec (flattenBinds spec_binds) : binds'
                    -- Note [Glom the bindings if imported functions are specialised]
+
+       ; dumpIfSet_dyn Opt_D_dump_simpl_stats "Specialise stats"
+         (hcat [int (count + count'),  ptext (sLit " Bindings specialised")])
 
        ; return (guts { mg_binds = final_binds
                       , mg_rules = new_rules ++ local_rules }) }
@@ -603,18 +606,19 @@ specImports :: DynFlags
                                 -- (but not external packages, which can change)
             -> UsageDetails     -- Calls for imported things, and floating bindings
             -> CoreM ( [CoreRule]   -- New rules
-                     , [CoreBind] ) -- Specialised bindings and floating bindings
+                     , [CoreBind]   -- Specialised bindings and floating bindings
+                     , Int )    -- Number of specilisations made
 -- See Note [Specialise imported INLINABLE things]
 specImports dflags done rb uds
   = do { let import_calls = varEnvElts (ud_calls uds)
-       ; (rules, spec_binds) <- go rb import_calls
-       ; return (rules, wrapDictBinds (ud_binds uds) spec_binds) }
+       ; (rules, spec_binds, count) <- go rb import_calls
+       ; return (rules, wrapDictBinds (ud_binds uds) spec_binds, count) }
   where
-    go _ [] = return ([], [])
+    go _ [] = return ([], [], 0)
     go rb (CIS fn calls_for_fn : other_calls)
-      = do { (rules1, spec_binds1) <- specImport dflags done rb fn (Map.toList calls_for_fn)
-           ; (rules2, spec_binds2) <- go (extendRuleBaseList rb rules1) other_calls
-           ; return (rules1 ++ rules2, spec_binds1 ++ spec_binds2) }
+      = do { (rules1, spec_binds1, count) <- specImport dflags done rb fn (Map.toList calls_for_fn)
+           ; (rules2, spec_binds2, count') <- go (extendRuleBaseList rb rules1) other_calls
+           ; return (rules1 ++ rules2, spec_binds1 ++ spec_binds2, count + count') }
 
 specImport :: DynFlags
            -> VarSet                -- Don't specialise these
@@ -622,10 +626,11 @@ specImport :: DynFlags
            -> RuleBase              -- Rules from this module
            -> Id -> [CallInfo]      -- Imported function and calls for it
            -> CoreM ( [CoreRule]    -- New rules
-                    , [CoreBind] )  -- Specialised bindings
+                    , [CoreBind]    -- Specialised bindings
+                    , Int )         -- Number of specilisations made
 specImport dflags done rb fn calls_for_fn
   | fn `elemVarSet` done
-  = return ([], [])     -- No warning.  This actually happens all the time
+  = return ([], [], 0)  -- No warning.  This actually happens all the time
                         -- when specialising a recursive function, becuase
                         -- the RHS of the specialised function contains a recursive
                         -- call to the original function
@@ -640,7 +645,7 @@ specImport dflags done rb fn calls_for_fn
        ; let full_rb = unionRuleBase rb (eps_rule_base eps)
              rules_for_fn = getRules full_rb fn
 
-       ; (rules1, spec_pairs, uds) <- runSpecM dflags $
+       ; ((rules1, spec_pairs, uds), count) <- runSpecM dflags $
               specCalls emptySubst rules_for_fn calls_for_fn fn rhs
        ; let spec_binds1 = [NonRec b r | (b,r) <- spec_pairs]
              -- After the rules kick in we may get recursion, but
@@ -648,15 +653,16 @@ specImport dflags done rb fn calls_for_fn
              -- See Note [Glom the bindings if imported functions are specialised]
 
               -- Now specialise any cascaded calls
-       ; (rules2, spec_binds2) <- specImports dflags (extendVarSet done fn)
+       ; (rules2, spec_binds2, count') <- specImports dflags (extendVarSet done fn)
                                                      (extendRuleBaseList rb rules1)
                                                      uds
 
-       ; return (rules2 ++ rules1, spec_binds2 ++ spec_binds1) }
+             -- TODO: Thread more counts in recursive calls?
+       ; return (rules2 ++ rules1, spec_binds2 ++ spec_binds1, count + count') }
 
   | otherwise
   = WARN( True, ptext (sLit "specImport discard") <+> ppr fn <+> ppr calls_for_fn )
-    return ([], [])
+    return ([], [], 0)
 \end{code}
 
 Note [Specialise imported INLINABLE things]
@@ -1175,6 +1181,7 @@ specCalls subst rules_for_me calls_for_me fn rhs
                                         `setInlinePragma` spec_inl_prag
                                         `setIdUnfolding`  spec_unf
 
+           ; recordSpecSM
            ; return (Just ((spec_f_w_arity, spec_rhs), final_uds, spec_env_rule)) } }
       where
         my_zipEqual xs ys zs
@@ -1796,7 +1803,8 @@ newtype SpecM a = SpecM (State SpecState a)
 
 data SpecState = SpecState {
                      spec_uniq_supply :: UniqSupply,
-                     spec_dflags :: DynFlags
+                     spec_dflags :: DynFlags,
+                     spec_count :: !Int
                  }
 
 instance Monad SpecM where
@@ -1817,14 +1825,16 @@ instance MonadUnique SpecM where
 instance HasDynFlags SpecM where
     getDynFlags = SpecM $ liftM spec_dflags get
 
-runSpecM :: DynFlags -> SpecM a -> CoreM a
+runSpecM :: DynFlags -> SpecM a -> CoreM (a, Int)
 runSpecM dflags (SpecM spec)
     = do us <- getUniqueSupplyM
          let initialState = SpecState {
                                 spec_uniq_supply = us,
-                                spec_dflags = dflags
+                                spec_dflags = dflags,
+                                spec_count = 0
                             }
-         return $ evalState spec initialState
+         let (x, s) = runState spec initialState
+         return $ (x, spec_count s)
 
 mapAndCombineSM :: (a -> SpecM (b, UsageDetails)) -> [a] -> SpecM ([b], UsageDetails)
 mapAndCombineSM _ []     = return ([], emptyUDs)
@@ -1867,6 +1877,12 @@ newSpecIdSM old_id new_ty
               new_occ = mkSpecOcc (nameOccName name)
               new_id  = mkUserLocal new_occ uniq new_ty (getSrcSpan name)
         ; return new_id }
+
+-- Increment the count of number of specialisation made.
+recordSpecSM :: SpecM ()
+recordSpecSM
+  = SpecM $ do { spec <- get
+               ; put $! spec { spec_count = spec_count spec + 1 } }
 \end{code}
 
 
