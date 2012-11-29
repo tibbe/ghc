@@ -1208,6 +1208,8 @@ chooseBoxingStrategy dflags arg_ty bang
 	               HsNoBang -> HsNoBang
 	               HsStrict | gopt Opt_UnboxStrictFields dflags
                                 -> can_unbox HsStrict arg_ty
+	               HsStrict | gopt Opt_UnboxStrictPrimitiveFields dflags
+                                -> can_unbox_scalar arg_ty
                                 | otherwise -> HsStrict
                        HsNoUnpack -> HsStrict
 	               HsUnpack   -> can_unbox HsUnpackFailed arg_ty
@@ -1234,6 +1236,28 @@ chooseBoxingStrategy dflags arg_ty bang
                  else HsUnpack
 
               | otherwise -> fail_bang
+
+    -- TODO: Deal with type synonyms?
+
+    can_unbox_scalar :: TcType -> HsBang
+    -- We unpack any field which final unpacked size would be smaller
+    -- or equal to the size of a pointer.
+    can_unbox_scalar arg_ty
+       = case splitTyConApp_maybe arg_ty of
+            Nothing -> HsStrict
+
+            Just (arg_tycon, _)
+              | isPrimTyCon arg_tycon -> HsUnpack
+              -- TODO: Do we want to unpack all primitive TyCons?
+              | isEmptyDataTyCon arg_tycon -> HsUnpack
+              | isAbstractTyCon arg_tycon -> HsStrict
+                      -- See Note [Don't complain about UNPACK on abstract TyCons]
+              | not (isRecursiveTyCon arg_tycon)        -- Note [Recusive unboxing]
+              -> case tyConSingleFieldDataCon_maybe arg_tycon of
+                    Nothing -> HsStrict
+                    Just ty -> can_unbox_scalar ty
+              | otherwise -> HsStrict
+
 \end{code}
 
 Note [Don't complain about UNPACK on abstract TyCons]
