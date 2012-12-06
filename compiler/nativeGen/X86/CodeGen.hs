@@ -2669,7 +2669,7 @@ $ llvm-gcc -fno-PIC -m32 -march=pentium -c /tmp/test.c -o \
         .section        __TEXT,__literal8,8byte_literals
         .align  3
 LCPI1_0:
-        .long   1602224128
+        .long   1602224128   // +1.0*2^64
         .long   0
         .section        __TEXT,__text,regular,pure_instructions
         .globl  _f
