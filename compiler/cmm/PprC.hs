@@ -609,6 +609,7 @@ pprMachOp_for_C mop = case mop of
         MO_FF_Conv from to | from == to -> empty
         MO_FF_Conv _from to -> parens (machRep_F_CType to)
 
+        MO_UF_Conv _from to -> parens (machRep_F_CType to)
         MO_SF_Conv _from to -> parens (machRep_F_CType to)
         MO_FS_Conv _from to -> parens (machRep_S_CType to)
         

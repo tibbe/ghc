@@ -909,7 +909,9 @@ machOps = listToUFM $
         ( "f2i32",    flip MO_FS_Conv W32 ),
         ( "f2i64",    flip MO_FS_Conv W64 ),
         ( "i2f32",    flip MO_SF_Conv W32 ),
-        ( "i2f64",    flip MO_SF_Conv W64 )
+        ( "i2f64",    flip MO_SF_Conv W64 ),
+        ( "z2f32",    flip MO_UF_Conv W32 ),
+        ( "z2f64",    flip MO_UF_Conv W64 )
         ]
 
 callishMachOps = listToUFM $

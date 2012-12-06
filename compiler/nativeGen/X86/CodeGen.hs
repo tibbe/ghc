@@ -610,6 +610,8 @@ getRegister' dflags is32Bit (CmmMachOp mop [x]) = do -- unary MachOps
       MO_FS_Conv from to -> coerceFP2Int from to x
       MO_SF_Conv from to -> coerceInt2FP from to x
 
+      MO_UF_Conv from to -> coerceWord2FP from to x
+
       _other -> pprPanic "getRegister" (pprMachOp mop)
    where
         triv_ucode :: (Size -> Operand -> Instr) -> Size -> NatM Register
@@ -2652,6 +2654,72 @@ coerceFP2Int from to x = if_sse2 coerceFP2Int_sse2 coerceFP2Int_x87
      return (Any (intSize to) code)
          -- works even if the destination rep is <II32
 
+--------------------------------------------------------------------------------
+
+{-
+This is what we want to generate:
+
+double f(unsigned long long u) { return u; }
+
+$ llvm-gcc -fno-PIC -m32 -march=pentium -c /tmp/test.c -o \
+  /tmp/test.o- \
+  save-temps && cat test.s
+
+        .section        __TEXT,__text,regular,pure_instructions
+        .section        __TEXT,__literal8,8byte_literals
+        .align  3
+LCPI1_0:
+        .long   1602224128
+        .long   0
+        .section        __TEXT,__text,regular,pure_instructions
+        .globl  _f
+        .align  4, 0x90
+_f:
+        pushl   %ebp
+        movl    %esp, %ebp
+        subl    $16, %esp
+        movl    8(%ebp), %eax
+        movl    12(%ebp), %ecx
+        movl    %ecx, -4(%ebp)
+        movl    %eax, -8(%ebp)
+        testl   %ecx, %ecx              // check sign
+        sets    %al                     // check sign
+        xorb    $1, %al                 // check sign
+        movzbl  %al, %eax               // 0 if signed
+        fildll  -8(%ebp)                // load integer
+        fadds   LCPI1_0(,%eax,4)        // add one of two constants
+        fstpl   -16(%ebp)               // store and pop
+        fldl    -16(%ebp)
+        addl    $16, %esp
+        popl    %ebp
+        ret
+
+
+.subsections_via_symbols
+-}
+
+coerceWord2FP :: Width -> Width -> CmmExpr -> NatM Register
+coerceWord2FP from to x = if_sse2 coerce_sse2 coerce_x87
+ where
+   coerce_x87 = do
+     (x_reg, x_code) <- getSomeReg x
+     let
+           opc  = case to of W32 -> GITOF; W64 -> GITOD;
+                             n -> panic $ "coerceWord2FP.x87: unhandled width ("
+                                         ++ show n ++ ")"
+           code dst = x_code `snocOL` opc x_reg dst
+        -- ToDo: works for non-II32 reps?
+     return (Any FF80 code)
+
+   coerce_sse2 = do
+     (x_op, x_code) <- getOperand x  -- ToDo: could be a safe operand
+     let
+           opc  = case to of W32 -> CVTSI2SS; W64 -> CVTSI2SD
+                             n -> panic $ "coerceWord2FP.sse: unhandled width ("
+                                         ++ show n ++ ")"
+           code dst = x_code `snocOL` opc (intSize from) x_op dst
+     return (Any (floatSize to) code)
+        -- works even if the destination rep is <II32
 
 --------------------------------------------------------------------------------
 coerceFP2FP :: Width -> CmmExpr -> NatM Register

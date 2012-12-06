@@ -805,6 +805,9 @@ translateOp dflags Double2IntOp   = Just (MO_FS_Conv W64 (wordWidth dflags))
 translateOp dflags Int2FloatOp    = Just (MO_SF_Conv (wordWidth dflags) W32)
 translateOp dflags Float2IntOp    = Just (MO_FS_Conv W32 (wordWidth dflags))
 
+translateOp dflags Word2DoubleOp  = Just (MO_UF_Conv (wordWidth dflags) W64)
+translateOp dflags Word2FloatOp   = Just (MO_UF_Conv (wordWidth dflags) W32)
+
 translateOp _      Float2DoubleOp = Just (MO_FF_Conv W32 W64)
 translateOp _      Double2FloatOp = Just (MO_FF_Conv W64 W32)
 

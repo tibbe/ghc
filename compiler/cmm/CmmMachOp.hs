@@ -98,6 +98,7 @@ data MachOp
 
   -- Conversions.  Some of these will be NOPs.
   -- Floating-point conversions use the signed variant.
+  | MO_UF_Conv Width Width      -- Unsigned int -> Float
   | MO_SF_Conv Width Width      -- Signed int -> Float
   | MO_FS_Conv Width Width      -- Float -> Signed int
   | MO_SS_Conv Width Width      -- Signed int -> Signed int
@@ -337,6 +338,7 @@ machOpResultType dflags mop tys =
     MO_UU_Conv _ to     -> cmmBits to
     MO_FS_Conv _ to     -> cmmBits to
     MO_SF_Conv _ to     -> cmmFloat to
+    MO_UF_Conv _ to     -> cmmFloat to
     MO_FF_Conv _ to     -> cmmFloat to
   where
     (ty1:_) = tys
@@ -403,6 +405,7 @@ machOpArgReps dflags op =
     MO_UU_Conv from _   -> [from]
     MO_SF_Conv from _   -> [from]
     MO_FS_Conv from _   -> [from]
+    MO_UF_Conv from _   -> [from]
     MO_FF_Conv from _   -> [from]
 
 -----------------------------------------------------------------------------
