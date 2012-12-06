@@ -447,6 +447,7 @@ uf will get unified *once more* to (F Int).
 
 \begin{code}
 newtype Untouchables = Untouchables Int
+  -- See Note [Untouchable type variables] for what this Int is
 
 noUntouchables :: Untouchables
 noUntouchables = Untouchables 0   -- 0 = outermost level
@@ -899,10 +900,11 @@ mkTcEqPred ty1 ty2
 isTauTy :: Type -> Bool
 isTauTy ty | Just ty' <- tcView ty = isTauTy ty'
 isTauTy (TyVarTy _)	  = True
+isTauTy (LitTy {})        = True
 isTauTy (TyConApp tc tys) = all isTauTy tys && isTauTyCon tc
 isTauTy (AppTy a b)	  = isTauTy a && isTauTy b
 isTauTy (FunTy a b)	  = isTauTy a && isTauTy b
-isTauTy _    		  = False
+isTauTy (ForAllTy {})     = False
 
 isTauTyCon :: TyCon -> Bool
 -- Returns False for type synonyms whose expansion is a polytype
