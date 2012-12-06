@@ -2699,27 +2699,34 @@ _f:
 -}
 
 coerceWord2FP :: Width -> Width -> CmmExpr -> NatM Register
-coerceWord2FP from to x = if_sse2 coerce_sse2 coerce_x87
- where
-   coerce_x87 = do
-     (x_reg, x_code) <- getSomeReg x
-     let
-           opc  = case to of W32 -> GITOF; W64 -> GITOD;
-                             n -> panic $ "coerceWord2FP.x87: unhandled width ("
-                                         ++ show n ++ ")"
-           code dst = x_code `snocOL` opc x_reg dst
-        -- ToDo: works for non-II32 reps?
-     return (Any FF80 code)
+coerceWord2FP from to x = if_sse2 coerceFP2Int_sse2 coerce_x87
+  where
+    coerce_x87 = do
+        case to of
+            W64 -> do
+                (x_reg, x_code) <- getSomeReg x
+                let const_2pow64 = CmmInt 0x5f800000 W32
+                    const_0      = CmmInt 0 W32
+                Amode amode_2pow64 amode_code_2pow64 <-
+                    memConstant (widthInBytes W32) const_2pow64
+                Amode amode_0 amode_code_0 <-
+                    memConstant (widthInBytes W32) const_0
+                let code dst = x_code `appOL` amode_code_2pow64
+                               `appOL` amode_code_0 `appOL` toOL [
+                                   TEST II64 (OpReg x_reg) (OpReg x_reg)
+                                   ]
+                return (Any FF80 code)
+                    
+            n -> panic $ "coerceWord2FP.x87: unhandled width ("
+                 ++ show n ++ ")"
 
-   coerce_sse2 = do
-     (x_op, x_code) <- getOperand x  -- ToDo: could be a safe operand
-     let
-           opc  = case to of W32 -> CVTSI2SS; W64 -> CVTSI2SD
-                             n -> panic $ "coerceWord2FP.sse: unhandled width ("
-                                         ++ show n ++ ")"
-           code dst = x_code `snocOL` opc (intSize from) x_op dst
-     return (Any (floatSize to) code)
-        -- works even if the destination rep is <II32
+    coerceFP2Int_sse2 = do
+        (x_op, x_code) <- getOperand x  -- ToDo: could be a safe operand
+        let opc  = case from of W32 -> CVTTSS2SIQ; W64 -> CVTTSD2SIQ;
+                                n -> panic $ "coerceFP2Init.sse: unhandled width ("
+                                     ++ show n ++ ")"
+            code dst = x_code `snocOL` opc (intSize to) x_op dst
+        return (Any (intSize to) code)
 
 --------------------------------------------------------------------------------
 coerceFP2FP :: Width -> CmmExpr -> NatM Register
