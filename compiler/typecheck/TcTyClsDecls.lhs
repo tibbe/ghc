@@ -37,6 +37,7 @@ import TcClassDcl
 import TcHsType
 import TcMType
 import TcType
+import qualified TysPrim
 import TysWiredIn( unitTy )
 import Type
 import Kind
@@ -1250,7 +1251,8 @@ chooseBoxingStrategy dflags arg_ty bang
             Just (arg_tycon, _)
               | isAbstractTyCon arg_tycon -> False
                       -- See Note [Don't complain about UNPACK on abstract TyCons]
-              | isPrimTyCon arg_tycon -> True
+              | isPrimTyCon arg_tycon &&
+                arg_tycon `elem` ptrSizedPrimTyCons -> True
               -- TODO: Check that the PrimTyCon corresponds to a type
               -- with pointer-sized representation.
               | isEmptyDataTyCon arg_tycon -> True
@@ -1258,6 +1260,26 @@ chooseBoxingStrategy dflags arg_ty bang
               , Just ty <- tyConSingleFieldDataCon_maybe arg_tycon
               -> can_unbox_prim ty
               | otherwise -> False
+
+ptrSizedPrimTyCons :: [TyCon]
+ptrSizedPrimTyCons =
+    [ TysPrim.addrPrimTyCon
+    , TysPrim.arrayPrimTyCon
+    , TysPrim.byteArrayPrimTyCon
+    , TysPrim.arrayArrayPrimTyCon
+    , TysPrim.charPrimTyCon
+    , TysPrim.doublePrimTyCon
+    , TysPrim.floatPrimTyCon
+    , TysPrim.intPrimTyCon
+    , TysPrim.int32PrimTyCon
+    , TysPrim.int64PrimTyCon
+    , TysPrim.mutableArrayPrimTyCon
+    , TysPrim.mutableByteArrayPrimTyCon
+    , TysPrim.mutableArrayArrayPrimTyCon
+    , TysPrim.wordPrimTyCon
+    , TysPrim.word32PrimTyCon
+    , TysPrim.word64PrimTyCon
+    ]
 
 \end{code}
 
