@@ -77,6 +77,7 @@ import SrcLoc
 import Util
 import DynFlags
 import FastString
+import OrdList
 
 import TcEvidence
 
@@ -610,16 +611,20 @@ cases like
 mkSelectorBinds :: [Maybe (Tickish Id)]  -- ticks to add, possibly
                 -> LPat Id      -- The pattern
 		-> CoreExpr	-- Expression to which the pattern is bound
-		-> DsM [(Id,CoreExpr)]
+		-> DsM ([(Id,CoreExpr)], OrdList Id)
 
 mkSelectorBinds ticks (L _ (VarPat v)) val_expr
-  = return [(v, case ticks of
-                  [t] -> mkOptTickBox t val_expr
-                  _   -> val_expr)]
+  = do { dflags <- getDynFlags
+       ; let seq_ids | xopt Opt_Strict dflags = unitOL v
+                     | otherwise = nilOL
+       ; return ([(v, case ticks of
+                     [t] -> mkOptTickBox t val_expr
+                     _   -> val_expr)], seq_ids)
+       }
 
 mkSelectorBinds ticks pat val_expr
   | null binders 
-  = return []
+  = return ([], nilOL)
 
   | isSingleton binders || is_simple_lpat pat
     -- See Note [mkSelectorBinds]
@@ -644,7 +649,7 @@ mkSelectorBinds ticks pat val_expr
        ; binds <- zipWithM (mk_bind val_var err_var) ticks' binders
        ; return ( (val_var, val_expr) : 
                   (err_var, err_expr) :
-                  binds ) }
+                  binds, nilOL ) }  -- TODO: Which IDs to return?
 
   | otherwise
   = do { error_expr <- mkErrorAppDs iRREFUT_PAT_ERROR_ID   tuple_ty (ppr pat)
@@ -654,7 +659,8 @@ mkSelectorBinds ticks pat val_expr
               = (binder, mkOptTickBox tick $
                             mkTupleSelector local_binders binder
                                             tuple_var (Var tuple_var))
-       ; return ( (tuple_var, tuple_expr) : zipWith mk_tup_bind ticks' binders ) }
+         -- TODO: Which IDs to return?
+       ; return ( (tuple_var, tuple_expr) : zipWith mk_tup_bind ticks' binders, nilOL ) }
   where
     binders       = collectPatBinders pat
     ticks'        = ticks ++ repeat Nothing

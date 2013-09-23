@@ -82,23 +82,24 @@ import Control.Monad(liftM)
 %************************************************************************
 
 \begin{code}
-dsTopLHsBinds :: LHsBinds Id -> DsM (OrdList (Id,CoreExpr))
+dsTopLHsBinds :: LHsBinds Id -> DsM (OrdList (Id,CoreExpr), OrdList Id)
 dsTopLHsBinds binds = ds_lhs_binds binds
 
-dsLHsBinds :: LHsBinds Id -> DsM [(Id,CoreExpr)]
-dsLHsBinds binds = do { binds' <- ds_lhs_binds binds
-                      ; return (fromOL binds') }
+dsLHsBinds :: LHsBinds Id -> DsM ([(Id,CoreExpr)], [Id])
+dsLHsBinds binds = do { (binds', seq_ids) <- ds_lhs_binds binds
+                      ; return (fromOL binds', fromOL seq_ids) }
 
 ------------------------
-ds_lhs_binds :: LHsBinds Id -> DsM (OrdList (Id,CoreExpr))
+ds_lhs_binds :: LHsBinds Id -> DsM (OrdList (Id,CoreExpr), OrdList Id)
 
-ds_lhs_binds binds = do { ds_bs <- mapBagM dsLHsBind binds
-                        ; return (foldBag appOL id nilOL ds_bs) }
+ds_lhs_binds binds = do { (ds_bs, seq_ids) <- mapAndUnzipBagM dsLHsBind binds
+                        ; return (foldBag appOL id nilOL ds_bs,
+                                  foldBag appOL id nilOL seq_ids) }
 
-dsLHsBind :: LHsBind Id -> DsM (OrdList (Id,CoreExpr))
+dsLHsBind :: LHsBind Id -> DsM (OrdList (Id,CoreExpr), OrdList Id)
 dsLHsBind (L loc bind) = putSrcSpanDs loc $ dsHsBind bind
 
-dsHsBind :: HsBind Id -> DsM (OrdList (Id,CoreExpr))
+dsHsBind :: HsBind Id -> DsM (OrdList (Id,CoreExpr), OrdList Id)
 
 dsHsBind (VarBind { var_id = var, var_rhs = expr, var_inline = inline_regardless })
   = do  { dflags <- getDynFlags
@@ -109,7 +110,8 @@ dsHsBind (VarBind { var_id = var, var_rhs = expr, var_inline = inline_regardless
         ; let var' | inline_regardless = var `setIdUnfolding` mkCompulsoryUnfolding core_expr
 	      	   | otherwise         = var
 
-        ; return (unitOL (makeCorePair dflags var' False 0 core_expr)) }
+        ; return (unitOL (makeCorePair dflags var' False 0 core_expr),
+                  unitOL var') }
 
 dsHsBind (FunBind { fun_id = L _ fun, fun_matches = matches
                   , fun_co_fn = co_fn, fun_tick = tick
@@ -118,17 +120,21 @@ dsHsBind (FunBind { fun_id = L _ fun, fun_matches = matches
         ; (args, body) <- matchWrapper (FunRhs (idName fun) inf) matches
         ; let body' = mkOptTickBox tick body
         ; rhs <- dsHsWrapper co_fn (mkLams args body')
-        ; {- pprTrace "dsHsBind" (ppr fun <+> ppr (idInlinePragma fun)) $ -}
-           return (unitOL (makeCorePair dflags fun False 0 rhs)) }
+        ; {- pprTrace "dsHsBind" (ppr fun <+> ppr (idInlinePragma -}
+          {- fun)) $ -}
+           -- TODO: Returning 'fun' in the second list causes an
+           -- "a_a1f9 is out of scope" core lint error when we
+           -- generate the case in DsExpr.
+           return (unitOL (makeCorePair dflags fun False 0 rhs), nilOL) }
 
 dsHsBind (PatBind { pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty
                   , pat_ticks = (rhs_tick, var_ticks) })
   = do	{ body_expr <- dsGuarded grhss ty
         ; let body' = mkOptTickBox rhs_tick body_expr
-        ; sel_binds <- mkSelectorBinds var_ticks pat body'
+        ; (sel_binds, seq_ids) <- mkSelectorBinds var_ticks pat body'
 	  -- We silently ignore inline pragmas; no makeCorePair
 	  -- Not so cool, but really doesn't matter
-    ; return (toOL sel_binds) }
+    ; return (toOL sel_binds, seq_ids) }
 
 	-- A common case: one exported variable
 	-- Non-recursive bindings come through this way
@@ -140,7 +146,7 @@ dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
   | ABE { abe_wrap = wrap, abe_poly = global
         , abe_mono = local, abe_prags = prags } <- export
   = do  { dflags <- getDynFlags
-        ; bind_prs    <- ds_lhs_binds binds
+        ; (bind_prs, seq_ids) <- ds_lhs_binds binds
 	; let	core_bind = Rec (fromOL bind_prs)
         ; ds_binds <- dsTcEvBinds ev_binds
         ; rhs <- dsHsWrapper wrap $  -- Usually the identity
@@ -154,15 +160,16 @@ dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
 	; let   global'   = addIdSpecialisations global rules
 		main_bind = makeCorePair dflags global' (isDefaultMethod prags)
                                          (dictArity dicts) rhs 
-    
-	; return (main_bind `consOL` spec_binds) }
+
+          -- TODO: Should we include seq_ids here?
+	; return (main_bind `consOL` spec_binds, consOL global seq_ids) }
 
 dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
                    , abs_exports = exports, abs_ev_binds = ev_binds
                    , abs_binds = binds })
          -- See Note [Desugaring AbsBinds]
   = do  { dflags <- getDynFlags
-        ; bind_prs    <- ds_lhs_binds binds
+        ; (bind_prs, seq_ids)    <- ds_lhs_binds binds
         ; let core_bind = Rec [ makeCorePair dflags (add_inline lcl_id) False 0 rhs
                               | (lcl_id, rhs) <- fromOL bind_prs ]
 	      	-- Monomorphic recursion possible, hence Rec
@@ -196,8 +203,10 @@ dsHsBind (AbsBinds { abs_tvs = tyvars, abs_ev_vars = dicts
 
         ; export_binds_s <- mapM mk_bind exports
 
+          -- TODO: Is it correct to include seq_ids from above in the
+          -- return value here?
 	; return ((poly_tup_id, poly_tup_rhs) `consOL` 
-		    concatOL export_binds_s) }
+		    concatOL export_binds_s, consOL poly_tup_id seq_ids) }
   where
     inline_env :: IdEnv Id   -- Maps a monomorphic local Id to one with
                              -- the inline pragma from the source

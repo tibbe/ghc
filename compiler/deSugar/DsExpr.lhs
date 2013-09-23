@@ -109,11 +109,17 @@ ds_val_bind (NonRecursive, hsbinds) body
 
 -- Ordinary case for bindings; none should be unlifted
 ds_val_bind (_is_rec, binds) body
-  = do  { prs <- dsLHsBinds binds
+  = do  { (prs, seq_ids) <- dsLHsBinds binds
+        ; dflags <- getDynFlags
         ; ASSERT2( not (any (isUnLiftedType . idType . fst) prs), ppr _is_rec $$ ppr binds )
           case prs of
             [] -> return body
-            _  -> return (Let (Rec prs) body) }
+            _  -> let body1
+                        | xopt Opt_Strict dflags = foldr mkEval body seq_ids
+                        | otherwise = body
+                  -- TODO: Do we have to modify 'prs' somehow? Can
+                  -- seq_ids contain IDs not in 'prs'?
+                  in return (Let (Rec prs) body1) }
         -- Use a Rec regardless of is_rec. 
         -- Why? Because it allows the binds to be all
         -- mixed up, which is what happens in one rare case
@@ -124,6 +130,8 @@ ds_val_bind (_is_rec, binds) body
         --
         -- NB The previous case dealt with unlifted bindings, so we
         --    only have to deal with lifted ones now; so Rec is ok
+  where
+    mkEval var e = Case (Var var) var (exprType body) [(DEFAULT, [], e)]
 
 ------------------
 dsStrictBind :: HsBind Id -> CoreExpr -> DsM CoreExpr
@@ -162,6 +170,7 @@ dsStrictBind (PatBind {pat_lhs = pat, pat_rhs = grhss, pat_rhs_ty = ty }) body
 dsStrictBind bind body = pprPanic "dsLet: unlifted" (ppr bind $$ ppr body)
 
 ----------------------
+
 strictMatchOnly :: HsBind Id -> Bool
 strictMatchOnly (AbsBinds { abs_binds = lbinds })
   = anyBag (strictMatchOnly . unLoc) lbinds

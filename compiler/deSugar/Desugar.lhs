@@ -115,7 +115,8 @@ deSugar hsc_env
 
         ; (msgs, mb_res) <- initDs hsc_env mod rdr_env type_env fam_inst_env $
                        do { ds_ev_binds <- dsEvBinds ev_binds
-                          ; core_prs <- dsTopLHsBinds binds_cvr
+                          ; (core_prs, seq_ids) <- dsTopLHsBinds binds_cvr
+                            -- TODO: What to do with these seq_ids?
                           ; (spec_prs, spec_rules) <- dsImpSpecs imp_specs
                           ; (ds_fords, foreign_prs) <- dsForeigns fords
                           ; ds_rules <- mapMaybeM dsRule rules
