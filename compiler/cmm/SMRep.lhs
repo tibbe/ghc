@@ -34,7 +34,7 @@ module SMRep (
         -- ** Size-related things
         heapClosureSizeW,
         fixedHdrSize, arrWordsHdrSize, arrPtrsHdrSize, arrPtrsHdrSizeW,
-        profHdrSize, thunkHdrSize, nonHdrSizeW,
+        profHdrSize, thunkHdrSize, nonHdrSizeW, nonHdrSize,
 
         -- ** RTS closure types
         rtsClosureType, rET_SMALL, rET_BIG,
@@ -314,6 +314,8 @@ thunkHdrSize :: DynFlags -> WordOff
 thunkHdrSize dflags = fixedHdrSize dflags + smp_hdr
         where smp_hdr = sIZEOF_StgSMPThunkHeader dflags `quot` wORD_SIZE dflags
 
+nonHdrSize :: DynFlags -> SMRep -> ByteOff
+nonHdrSize dflags rep = wordsToBytes dflags (nonHdrSizeW rep)
 
 nonHdrSizeW :: SMRep -> WordOff
 nonHdrSizeW (HeapRep _ p np _) = p + np

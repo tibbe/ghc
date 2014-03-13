@@ -337,3 +337,10 @@ test('InlineArrayAlloc',
       only_ways(['normal'])],
      compile_and_run,
      ['-O2'])
+
+test('InlineCloneArrayAlloc',
+     [stats_num_field('bytes allocated',
+                      [ (wordsize(64), 1600041120, 5)]),
+      only_ways(['normal'])],
+     compile_and_run,
+     ['-O2'])
