@@ -133,23 +133,23 @@ shouldInlinePrimOp :: DynFlags
                    -> Maybe ([LocalReg] -> FCode ())
 
 shouldInlinePrimOp dflags NewArrayOp [(CmmLit (CmmInt n _)), init]
-  | n <= maxInlineAllocThreshold dflags =
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
       Just $ \ [res] -> doNewArrayOp res n init
 
 shouldInlinePrimOp dflags CloneArrayOp [src, src_off, (CmmLit (CmmInt n _))]
-  | n <= maxInlineAllocThreshold dflags =
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
       Just $ \ [res] -> emitCloneArray mkMAP_FROZEN_infoLabel res src src_off (fromInteger n)
 
 shouldInlinePrimOp dflags CloneMutableArrayOp [src, src_off, (CmmLit (CmmInt n _))]
-  | n <= maxInlineAllocThreshold dflags =
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
       Just $ \ [res] -> emitCloneArray mkMAP_DIRTY_infoLabel res src src_off (fromInteger n)
 
 shouldInlinePrimOp dflags FreezeArrayOp [src, src_off, (CmmLit (CmmInt n _))]
-  | n <= maxInlineAllocThreshold dflags =
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
       Just $ \ [res] -> emitCloneArray mkMAP_FROZEN_infoLabel res src src_off (fromInteger n)
 
 shouldInlinePrimOp dflags ThawArrayOp [src, src_off, (CmmLit (CmmInt n _))]
-  | n <= maxInlineAllocThreshold dflags =
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
       Just $ \ [res] -> emitCloneArray mkMAP_DIRTY_infoLabel res src src_off (fromInteger n)
 
 shouldInlinePrimOp dflags primop args
@@ -1576,10 +1576,6 @@ doNewArrayOp res_r n init = do
         (catAGraphs loopBody)
 
     emit $ mkAssign (CmmLocal res_r) (CmmReg arr)
-
--- | The inline allocation limit is 128 bytes, expressed in words.
-maxInlineAllocThreshold :: DynFlags -> Integer
-maxInlineAllocThreshold dflags = toInteger (128 `quot` wORD_SIZE dflags)
 
 -- ----------------------------------------------------------------------------
 -- Copying pointer arrays
