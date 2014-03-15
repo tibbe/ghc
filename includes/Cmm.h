@@ -810,7 +810,7 @@
    Defined as a macro to avoid function call overhead or code
    duplication. */
 #define cloneArray(info, src, offset, n)                       \
-    W_ words, size;                                            \
+    W_ words, size, i, off;                                    \
     gcptr dst, dst_p, src_p;                                   \
                                                                \
     again: MAYBE_GC(again);                                    \
@@ -826,12 +826,12 @@
                                                                \
     dst_p = dst + SIZEOF_StgMutArrPtrs;                        \
     src_p = src + SIZEOF_StgMutArrPtrs + WDS(offset);          \
+    i = 0;                                                     \
   while:                                                       \
-    if (n != 0) {                                              \
-        n = n - 1;                                             \
-        W_[dst_p] = W_[src_p];                                 \
-        dst_p = dst_p + WDS(1);                                \
-        src_p = src_p + WDS(1);                                \
+    if (i < n) {                                               \
+        off = WDS(i);                                          \
+        W_[dst_p + off] = W_[src_p + off];                     \
+        i = i + 1;                                             \
         goto while;                                            \
     }                                                          \
                                                                \
