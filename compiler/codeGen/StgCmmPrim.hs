@@ -1,4 +1,4 @@
------------------------------------------------------------------------------
+----------------------------------------------------------------------------
 --
 -- Stg to C--: primitive operations
 --
@@ -156,6 +156,26 @@ shouldInlinePrimOp dflags FreezeArrayOp [src, src_off, (CmmLit (CmmInt n _))]
 shouldInlinePrimOp dflags ThawArrayOp [src, src_off, (CmmLit (CmmInt n _))]
   | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
       Just $ \ [res] -> emitCloneArray mkMAP_DIRTY_infoLabel res src src_off (fromInteger n)
+
+shouldInlinePrimOp dflags NewSmallArrayOp [(CmmLit (CmmInt n _)), init]
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
+      Just $ \ [res] -> doNewSmallArrayOp res (fromInteger n) init
+
+shouldInlinePrimOp dflags CloneSmallArrayOp [src, src_off, (CmmLit (CmmInt n _))]
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
+      Just $ \ [res] -> emitCloneSmallArray mkSMAP_FROZEN_infoLabel res src src_off (fromInteger n)
+
+shouldInlinePrimOp dflags CloneMutableArrayOp [src, src_off, (CmmLit (CmmInt n _))]
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
+      Just $ \ [res] -> emitCloneSmallArray mkSMAP_DIRTY_infoLabel res src src_off (fromInteger n)
+
+shouldInlinePrimOp dflags FreezeSmallArrayOp [src, src_off, (CmmLit (CmmInt n _))]
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
+      Just $ \ [res] -> emitCloneSmallArray mkSMAP_FROZEN_infoLabel res src src_off (fromInteger n)
+
+shouldInlinePrimOp dflags ThawSmallArrayOp [src, src_off, (CmmLit (CmmInt n _))]
+  | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
+      Just $ \ [res] -> emitCloneSmallArray mkSMAP_DIRTY_infoLabel res src src_off (fromInteger n)
 
 shouldInlinePrimOp dflags primop args
   | primOpOutOfLine primop = Nothing
@@ -353,6 +373,10 @@ emitPrimOp _      [res] UnsafeFreezeArrayArrayOp [arg]
    = emit $ catAGraphs
    [ setInfo arg (CmmLit (CmmLabel mkMAP_FROZEN0_infoLabel)),
      mkAssign (CmmLocal res) arg ]
+emitPrimOp _      [res] UnsafeFreezeSmallArrayOp [arg]
+   = emit $ catAGraphs
+   [ setInfo arg (CmmLit (CmmLabel mkSMAP_FROZEN0_infoLabel)),
+     mkAssign (CmmLocal res) arg ]
 
 --  #define unsafeFreezzeByteArrayzh(r,a)       r=(a)
 emitPrimOp _      [res] UnsafeFreezeByteArrayOp [arg]
@@ -386,6 +410,12 @@ emitPrimOp _      []  WriteArrayArrayOp_MutableByteArray  [obj,ix,v] = doWritePt
 emitPrimOp _      []  WriteArrayArrayOp_ArrayArray        [obj,ix,v] = doWritePtrArrayOp obj ix v
 emitPrimOp _      []  WriteArrayArrayOp_MutableArrayArray [obj,ix,v] = doWritePtrArrayOp obj ix v
 
+emitPrimOp _      [res] ReadSmallArrayOp  [obj,ix] = doReadSmallPtrArrayOp res obj ix
+emitPrimOp _      [res] IndexSmallArrayOp [obj,ix] = doReadSmallPtrArrayOp res obj ix
+emitPrimOp _      []  WriteSmallArrayOp [obj,ix,v] = doWriteSmallPtrArrayOp obj ix v
+
+-- Getting the size of pointer arrays
+
 emitPrimOp dflags [res] SizeofArrayOp [arg]
    = emit $ mkAssign (CmmLocal res) (cmmLoadIndexW dflags arg (fixedHdrSize dflags + oFFSET_StgMutArrPtrs_ptrs dflags) (bWord dflags))
 emitPrimOp dflags [res] SizeofMutableArrayOp [arg]
@@ -394,6 +424,13 @@ emitPrimOp dflags [res] SizeofArrayArrayOp [arg]
    = emitPrimOp dflags [res] SizeofArrayOp [arg]
 emitPrimOp dflags [res] SizeofMutableArrayArrayOp [arg]
    = emitPrimOp dflags [res] SizeofArrayOp [arg]
+
+emitPrimOp dflags [res] SizeofSmallArrayOp [arg] =
+    emit $ mkAssign (CmmLocal res)
+    (cmmLoadIndexW dflags arg
+     (fixedHdrSize dflags + oFFSET_StgSmallMutArrPtrs_ptrs dflags) (bWord dflags))
+emitPrimOp dflags [res] SizeofSmallMutableArrayOp [arg] =
+    emitPrimOp dflags [res] SizeofSmallArrayOp [arg]
 
 -- IndexXXXoffAddr
 
@@ -1055,6 +1092,7 @@ translateOp dflags SameMVarOp             = Just (mo_wordEq dflags)
 translateOp dflags SameMutableArrayOp     = Just (mo_wordEq dflags)
 translateOp dflags SameMutableByteArrayOp = Just (mo_wordEq dflags)
 translateOp dflags SameMutableArrayArrayOp= Just (mo_wordEq dflags)
+translateOp dflags SameSmallMutableArrayOp= Just (mo_wordEq dflags)
 translateOp dflags SameTVarOp             = Just (mo_wordEq dflags)
 translateOp dflags EqStablePtrOp          = Just (mo_wordEq dflags)
 
@@ -1608,6 +1646,46 @@ doNewArrayOp res_r n init = do
 
     emit $ mkAssign (CmmLocal res_r) (CmmReg arr)
 
+-- | Takes a register to return the newly allocated array in, the size
+-- of the new array, and an initial value for the elements. Allocates
+-- a new 'SmallMutableArray#'.
+doNewSmallArrayOp :: CmmFormal -> WordOff -> CmmExpr -> FCode ()
+doNewSmallArrayOp res_r n init = do
+    dflags <- getDynFlags
+
+    let info_ptr = mkLblExpr mkSMAP_DIRTY_infoLabel
+        rep = smallArrPtrsRep dflags n
+
+    tickyAllocPrim (mkIntExpr dflags (smallArrPtrsHdrSize dflags))
+        (mkIntExpr dflags (nonHdrSize dflags rep))
+        (zeroExpr dflags)
+
+    let hdr_size = wordsToBytes dflags (fixedHdrSize dflags)
+
+    base <- allocHeapClosure rep info_ptr curCCS
+                     [ (mkIntExpr dflags n,
+                        hdr_size + oFFSET_StgSmallMutArrPtrs_ptrs dflags)
+                     ]
+
+    arr <- CmmLocal `fmap` newTemp (bWord dflags)
+    emit $ mkAssign arr base
+
+    -- Initialise all elements of the the array
+    p <- assignTemp $ cmmOffsetB dflags (CmmReg arr) (smallArrPtrsHdrSize dflags)
+    for <- newLabelC
+    emitLabel for
+    let loopBody =
+            [ mkStore (CmmReg (CmmLocal p)) init
+            , mkAssign (CmmLocal p) (cmmOffsetW dflags (CmmReg (CmmLocal p)) 1)
+            , mkBranch for ]
+    emit =<< mkCmmIfThen
+        (cmmULtWord dflags (CmmReg (CmmLocal p))
+         (cmmOffsetW dflags (CmmReg arr)
+          (smallArrPtrsHdrSizeW dflags + n)))
+        (catAGraphs loopBody)
+
+    emit $ mkAssign (CmmLocal res_r) (CmmReg arr)
+
 -- ----------------------------------------------------------------------------
 -- Copying pointer arrays
 
@@ -1730,6 +1808,43 @@ emitCloneArray info_p res_r src src_off n = do
 
     emit $ mkAssign (CmmLocal res_r) (CmmReg arr)
 
+-- | Takes an info table label, a register to return the newly
+-- allocated array in, a source array, an offset in the source array,
+-- and the number of elements to copy. Allocates a new array and
+-- initializes it from the source array.
+emitCloneSmallArray :: CLabel -> CmmFormal -> CmmExpr -> CmmExpr -> WordOff
+                    -> FCode ()
+emitCloneSmallArray info_p res_r src src_off n = do
+    dflags <- getDynFlags
+
+    let info_ptr = mkLblExpr info_p
+        rep = smallArrPtrsRep dflags n
+
+    tickyAllocPrim (mkIntExpr dflags (smallArrPtrsHdrSize dflags))
+        (mkIntExpr dflags (nonHdrSize dflags rep))
+        (zeroExpr dflags)
+
+    let hdr_size = wordsToBytes dflags (fixedHdrSize dflags)
+
+    base <- allocHeapClosure rep info_ptr curCCS
+                     [ (mkIntExpr dflags n,
+                        hdr_size + oFFSET_StgSmallMutArrPtrs_ptrs dflags)
+                     ]
+
+    arr <- CmmLocal `fmap` newTemp (bWord dflags)
+    emit $ mkAssign arr base
+
+    dst_p <- assignTempE $ cmmOffsetB dflags (CmmReg arr)
+             (smallArrPtrsHdrSize dflags)
+    src_p <- assignTempE $ cmmOffsetExprW dflags src
+             (cmmAddWord dflags
+              (mkIntExpr dflags (smallArrPtrsHdrSizeW dflags)) src_off)
+
+    emitMemcpyCall dst_p src_p (mkIntExpr dflags (wordsToBytes dflags n))
+        (mkIntExpr dflags (wORD_SIZE dflags))
+
+    emit $ mkAssign (CmmLocal res_r) (CmmReg arr)
+
 -- | Takes and offset in the destination array, the base address of
 -- the card table, and the number of elements affected (*not* the
 -- number of cards). The number of elements may not be zero.
@@ -1748,6 +1863,31 @@ emitSetCards dst_start dst_cards_start n = do
 cardCmm :: DynFlags -> CmmExpr -> CmmExpr
 cardCmm dflags i =
     cmmUShrWord dflags i (mkIntExpr dflags (mUT_ARR_PTRS_CARD_BITS dflags))
+
+------------------------------------------------------------------------------
+-- SmallArray PrimOp implementations
+
+doReadSmallPtrArrayOp :: LocalReg
+                      -> CmmExpr
+                      -> CmmExpr
+                      -> FCode ()
+doReadSmallPtrArrayOp res addr idx = do
+    dflags <- getDynFlags
+    mkBasicIndexedRead (smallArrPtrsHdrSize dflags) Nothing (gcWord dflags) res addr
+        (gcWord dflags) idx
+
+doWriteSmallPtrArrayOp :: CmmExpr
+                       -> CmmExpr
+                       -> CmmExpr
+                       -> FCode ()
+doWriteSmallPtrArrayOp addr idx val = do
+    dflags <- getDynFlags
+    let ty = cmmExprType dflags val
+    mkBasicIndexedWrite (smallArrPtrsHdrSize dflags) Nothing addr ty idx val
+    emit (setInfo addr (CmmLit (CmmLabel mkSMAP_DIRTY_infoLabel)))
+
+------------------------------------------------------------------------------
+-- Helpers for emitting function calls
 
 -- | Emit a call to @memcpy@.
 emitMemcpyCall :: CmmExpr -> CmmExpr -> CmmExpr -> CmmExpr -> FCode ()

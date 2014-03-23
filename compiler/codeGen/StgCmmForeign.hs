@@ -405,6 +405,9 @@ add_shim dflags arg_ty expr
   | tycon == arrayPrimTyCon || tycon == mutableArrayPrimTyCon
   = cmmOffsetB dflags expr (arrPtrsHdrSize dflags)
 
+  | tycon == smallArrayPrimTyCon || tycon == smallMutableArrayPrimTyCon
+  = cmmOffsetB dflags expr (smallArrPtrsHdrSize dflags)
+
   | tycon == byteArrayPrimTyCon || tycon == mutableByteArrayPrimTyCon
   = cmmOffsetB dflags expr (arrWordsHdrSize dflags)
 
