@@ -796,7 +796,7 @@ primop  CloneArrayOp "cloneArray#" GenPrimOp
   with
   out_of_line      = True
   has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
+  can_fail         = True
 
 primop  CloneMutableArrayOp "cloneMutableArray#" GenPrimOp
   MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
@@ -807,7 +807,7 @@ primop  CloneMutableArrayOp "cloneMutableArray#" GenPrimOp
   with
   out_of_line      = True
   has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
+  can_fail         = True
 
 primop  FreezeArrayOp "freezeArray#" GenPrimOp
   MutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, Array# a #)
@@ -818,7 +818,7 @@ primop  FreezeArrayOp "freezeArray#" GenPrimOp
   with
   out_of_line      = True
   has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
+  can_fail         = True
 
 primop  ThawArrayOp "thawArray#" GenPrimOp
   Array# a -> Int# -> Int# -> State# s -> (# State# s, MutableArray# s a #)
@@ -829,7 +829,7 @@ primop  ThawArrayOp "thawArray#" GenPrimOp
   with
   out_of_line      = True
   has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
+  can_fail         = True
 
 primop CasArrayOp  "casArray#" GenPrimOp
    MutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)
@@ -844,7 +844,7 @@ section "Small Arrays"
 
 	{Operations on {\tt SmallArray\#}. A {\tt SmallArray\#} works
          just like an {\tt Array\#}, except that its implementation is
-         optimized for small arrays.}
+         optimized for small arrays (i.e. no more than 128 elements.)}
 
 ------------------------------------------------------------------------
 
@@ -877,7 +877,6 @@ primop  WriteSmallArrayOp "writeSmallArray#" GenPrimOp
    with
    has_side_effects = True
    can_fail         = True
-   code_size        = 2 -- card update too
 
 primop  SizeofSmallArrayOp "sizeofSmallArray#" GenPrimOp
    SmallArray# a -> Int#
@@ -943,7 +942,7 @@ primop  CloneSmallArrayOp "cloneSmallArray#" GenPrimOp
   with
   out_of_line      = True
   has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
+  can_fail         = True
 
 primop  CloneSmallMutableArrayOp "cloneSmallMutableArray#" GenPrimOp
   SmallMutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, SmallMutableArray# s a #)
@@ -954,7 +953,7 @@ primop  CloneSmallMutableArrayOp "cloneSmallMutableArray#" GenPrimOp
   with
   out_of_line      = True
   has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
+  can_fail         = True
 
 primop  FreezeSmallArrayOp "freezeSmallArray#" GenPrimOp
   SmallMutableArray# s a -> Int# -> Int# -> State# s -> (# State# s, SmallArray# a #)
@@ -965,7 +964,7 @@ primop  FreezeSmallArrayOp "freezeSmallArray#" GenPrimOp
   with
   out_of_line      = True
   has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
+  can_fail         = True
 
 primop  ThawSmallArrayOp "thawSmallArray#" GenPrimOp
   SmallArray# a -> Int# -> Int# -> State# s -> (# State# s, SmallMutableArray# s a #)
@@ -976,7 +975,7 @@ primop  ThawSmallArrayOp "thawSmallArray#" GenPrimOp
   with
   out_of_line      = True
   has_side_effects = True
-  code_size = { primOpCodeSizeForeignCall + 4 }
+  can_fail         = True
 
 primop CasSmallArrayOp  "casSmallArray#" GenPrimOp
    SmallMutableArray# s a -> Int# -> a -> a -> State# s -> (# State# s, Int#, a #)

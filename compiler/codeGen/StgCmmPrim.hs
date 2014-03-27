@@ -139,7 +139,14 @@ shouldInlinePrimOp dflags NewByteArrayOp_Char [(CmmLit (CmmInt n _))]
 
 shouldInlinePrimOp dflags NewArrayOp [(CmmLit (CmmInt n _)), init]
   | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
-      Just $ \ [res] -> doNewArrayOp res (fromInteger n) init
+      Just $ \ [res] ->
+      doNewArrayOp res (arrPtrsRep dflags (fromInteger n)) mkMAP_DIRTY_infoLabel
+      [ (mkIntExpr dflags (fromInteger n),
+         fixedHdrSize dflags + oFFSET_StgMutArrPtrs_ptrs dflags)
+      , (mkIntExpr dflags (nonHdrSizeW (arrPtrsRep dflags (fromInteger n))),
+         fixedHdrSize dflags + oFFSET_StgMutArrPtrs_size dflags)
+      ]
+      (fromInteger n) init
 
 shouldInlinePrimOp dflags CloneArrayOp [src, src_off, (CmmLit (CmmInt n _))]
   | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
@@ -159,13 +166,18 @@ shouldInlinePrimOp dflags ThawArrayOp [src, src_off, (CmmLit (CmmInt n _))]
 
 shouldInlinePrimOp dflags NewSmallArrayOp [(CmmLit (CmmInt n _)), init]
   | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
-      Just $ \ [res] -> doNewSmallArrayOp res (fromInteger n) init
+      Just $ \ [res] ->
+      doNewArrayOp res (smallArrPtrsRep (fromInteger n)) mkSMAP_DIRTY_infoLabel
+      [ (mkIntExpr dflags (fromInteger n),
+         fixedHdrSize dflags + oFFSET_StgSmallMutArrPtrs_ptrs dflags)
+      ]
+      (fromInteger n) init
 
 shouldInlinePrimOp dflags CloneSmallArrayOp [src, src_off, (CmmLit (CmmInt n _))]
   | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
       Just $ \ [res] -> emitCloneSmallArray mkSMAP_FROZEN_infoLabel res src src_off (fromInteger n)
 
-shouldInlinePrimOp dflags CloneMutableArrayOp [src, src_off, (CmmLit (CmmInt n _))]
+shouldInlinePrimOp dflags CloneSmallMutableArrayOp [src, src_off, (CmmLit (CmmInt n _))]
   | wordsToBytes dflags (fromInteger n) <= maxInlineAllocSize dflags =
       Just $ \ [res] -> emitCloneSmallArray mkSMAP_DIRTY_infoLabel res src src_off (fromInteger n)
 
@@ -302,10 +314,10 @@ emitPrimOp _ [res] GetCurrentCCSOp [_dummy_arg]
    = emitAssign (CmmLocal res) curCCS
 
 emitPrimOp dflags [res] ReadMutVarOp [mutv]
-   = emitAssign (CmmLocal res) (cmmLoadIndexW dflags mutv (fixedHdrSize dflags) (gcWord dflags))
+   = emitAssign (CmmLocal res) (cmmLoadIndexW dflags mutv (fixedHdrSizeW dflags) (gcWord dflags))
 
 emitPrimOp dflags [] WriteMutVarOp [mutv,var]
-   = do emitStore (cmmOffsetW dflags mutv (fixedHdrSize dflags)) var
+   = do emitStore (cmmOffsetW dflags mutv (fixedHdrSizeW dflags)) var
         emitCCall
                 [{-no results-}]
                 (CmmLit (CmmLabel mkDirty_MUT_VAR_Label))
@@ -314,7 +326,7 @@ emitPrimOp dflags [] WriteMutVarOp [mutv,var]
 --  #define sizzeofByteArrayzh(r,a) \
 --     r = ((StgArrWords *)(a))->bytes
 emitPrimOp dflags [res] SizeofByteArrayOp [arg]
-   = emit $ mkAssign (CmmLocal res) (cmmLoadIndexW dflags arg (fixedHdrSize dflags) (bWord dflags))
+   = emit $ mkAssign (CmmLocal res) (cmmLoadIndexW dflags arg (fixedHdrSizeW dflags) (bWord dflags))
 
 --  #define sizzeofMutableByteArrayzh(r,a) \
 --      r = ((StgArrWords *)(a))->bytes
@@ -332,14 +344,14 @@ emitPrimOp dflags [res] ByteArrayContents_Char [arg]
 
 --  #define stableNameToIntzh(r,s)   (r = ((StgStableName *)s)->sn)
 emitPrimOp dflags [res] StableNameToIntOp [arg]
-   = emitAssign (CmmLocal res) (cmmLoadIndexW dflags arg (fixedHdrSize dflags) (bWord dflags))
+   = emitAssign (CmmLocal res) (cmmLoadIndexW dflags arg (fixedHdrSizeW dflags) (bWord dflags))
 
 --  #define eqStableNamezh(r,sn1,sn2)                                   \
 --    (r = (((StgStableName *)sn1)->sn == ((StgStableName *)sn2)->sn))
 emitPrimOp dflags [res] EqStableNameOp [arg1,arg2]
    = emitAssign (CmmLocal res) (CmmMachOp (mo_wordEq dflags) [
-                                   cmmLoadIndexW dflags arg1 (fixedHdrSize dflags) (bWord dflags),
-                                   cmmLoadIndexW dflags arg2 (fixedHdrSize dflags) (bWord dflags)
+                                   cmmLoadIndexW dflags arg1 (fixedHdrSizeW dflags) (bWord dflags),
+                                   cmmLoadIndexW dflags arg2 (fixedHdrSizeW dflags) (bWord dflags)
                          ])
 
 
@@ -417,7 +429,7 @@ emitPrimOp _      []  WriteSmallArrayOp [obj,ix,v] = doWriteSmallPtrArrayOp obj 
 -- Getting the size of pointer arrays
 
 emitPrimOp dflags [res] SizeofArrayOp [arg]
-   = emit $ mkAssign (CmmLocal res) (cmmLoadIndexW dflags arg (fixedHdrSize dflags + oFFSET_StgMutArrPtrs_ptrs dflags) (bWord dflags))
+   = emit $ mkAssign (CmmLocal res) (cmmLoadIndexW dflags arg (fixedHdrSizeW dflags + oFFSET_StgMutArrPtrs_ptrs dflags) (bWord dflags))
 emitPrimOp dflags [res] SizeofMutableArrayOp [arg]
    = emitPrimOp dflags [res] SizeofArrayOp [arg]
 emitPrimOp dflags [res] SizeofArrayArrayOp [arg]
@@ -428,7 +440,7 @@ emitPrimOp dflags [res] SizeofMutableArrayArrayOp [arg]
 emitPrimOp dflags [res] SizeofSmallArrayOp [arg] =
     emit $ mkAssign (CmmLocal res)
     (cmmLoadIndexW dflags arg
-     (fixedHdrSize dflags + oFFSET_StgSmallMutArrPtrs_ptrs dflags) (bWord dflags))
+     (fixedHdrSizeW dflags + oFFSET_StgSmallMutArrPtrs_ptrs dflags) (bWord dflags))
 emitPrimOp dflags [res] SizeofSmallMutableArrayOp [arg] =
     emitPrimOp dflags [res] SizeofSmallArrayOp [arg]
 
@@ -1229,7 +1241,7 @@ doWritePtrArrayOp addr idx val
 
 loadArrPtrsSize :: DynFlags -> CmmExpr -> CmmExpr
 loadArrPtrsSize dflags addr = CmmLoad (cmmOffsetB dflags addr off) (bWord dflags)
- where off = fixedHdrSize dflags * wORD_SIZE dflags + oFFSET_StgMutArrPtrs_ptrs dflags
+ where off = fixedHdrSize dflags + oFFSET_StgMutArrPtrs_ptrs dflags
 
 mkBasicIndexedRead :: ByteOff      -- Initial offset in bytes
                    -> Maybe MachOp -- Optional result cast
@@ -1504,7 +1516,7 @@ doNewByteArrayOp res_r n = do
         (mkIntExpr dflags (nonHdrSize dflags rep))
         (zeroExpr dflags)
 
-    let hdr_size = wordsToBytes dflags (fixedHdrSize dflags)
+    let hdr_size = fixedHdrSize dflags
 
     base <- allocHeapClosure rep info_ptr curCCS
                      [ (mkIntExpr dflags n,
@@ -1604,34 +1616,30 @@ doSetByteArrayOp ba off len c
 -- ----------------------------------------------------------------------------
 -- Allocating arrays
 
--- | Takes a register to return the newly allocated array in, the size
--- of the new array, and an initial value for the elements. Allocates
--- a new 'MutableArray#'.
-doNewArrayOp :: CmmFormal -> WordOff -> CmmExpr -> FCode ()
-doNewArrayOp res_r n init = do
+-- | Allocate a new array.
+doNewArrayOp :: CmmFormal             -- ^ return register
+             -> SMRep                 -- ^ representation of the array
+             -> CLabel                -- ^ info pointer
+             -> [(CmmExpr, ByteOff)]  -- ^ header payload
+             -> WordOff               -- ^ array size
+             -> CmmExpr               -- ^ initial element
+             -> FCode ()
+doNewArrayOp res_r rep info payload n init = do
     dflags <- getDynFlags
 
-    let info_ptr = mkLblExpr mkMAP_DIRTY_infoLabel
-        rep = arrPtrsRep dflags n
+    let info_ptr = mkLblExpr info
 
-    tickyAllocPrim (mkIntExpr dflags (arrPtrsHdrSize dflags))
+    tickyAllocPrim (mkIntExpr dflags (hdrSize dflags rep))
         (mkIntExpr dflags (nonHdrSize dflags rep))
         (zeroExpr dflags)
 
-    let hdr_size = wordsToBytes dflags (fixedHdrSize dflags)
-
-    base <- allocHeapClosure rep info_ptr curCCS
-                     [ (mkIntExpr dflags n,
-                        hdr_size + oFFSET_StgMutArrPtrs_ptrs dflags)
-                     , (mkIntExpr dflags (nonHdrSizeW rep),
-                        hdr_size + oFFSET_StgMutArrPtrs_size dflags)
-                     ]
+    base <- allocHeapClosure rep info_ptr curCCS payload
 
     arr <- CmmLocal `fmap` newTemp (bWord dflags)
     emit $ mkAssign arr base
 
     -- Initialise all elements of the the array
-    p <- assignTemp $ cmmOffsetB dflags (CmmReg arr) (arrPtrsHdrSize dflags)
+    p <- assignTemp $ cmmOffsetB dflags (CmmReg arr) (hdrSize dflags rep)
     for <- newLabelC
     emitLabel for
     let loopBody =
@@ -1641,47 +1649,7 @@ doNewArrayOp res_r n init = do
     emit =<< mkCmmIfThen
         (cmmULtWord dflags (CmmReg (CmmLocal p))
          (cmmOffsetW dflags (CmmReg arr)
-          (arrPtrsHdrSizeW dflags + n)))
-        (catAGraphs loopBody)
-
-    emit $ mkAssign (CmmLocal res_r) (CmmReg arr)
-
--- | Takes a register to return the newly allocated array in, the size
--- of the new array, and an initial value for the elements. Allocates
--- a new 'SmallMutableArray#'.
-doNewSmallArrayOp :: CmmFormal -> WordOff -> CmmExpr -> FCode ()
-doNewSmallArrayOp res_r n init = do
-    dflags <- getDynFlags
-
-    let info_ptr = mkLblExpr mkSMAP_DIRTY_infoLabel
-        rep = smallArrPtrsRep dflags n
-
-    tickyAllocPrim (mkIntExpr dflags (smallArrPtrsHdrSize dflags))
-        (mkIntExpr dflags (nonHdrSize dflags rep))
-        (zeroExpr dflags)
-
-    let hdr_size = wordsToBytes dflags (fixedHdrSize dflags)
-
-    base <- allocHeapClosure rep info_ptr curCCS
-                     [ (mkIntExpr dflags n,
-                        hdr_size + oFFSET_StgSmallMutArrPtrs_ptrs dflags)
-                     ]
-
-    arr <- CmmLocal `fmap` newTemp (bWord dflags)
-    emit $ mkAssign arr base
-
-    -- Initialise all elements of the the array
-    p <- assignTemp $ cmmOffsetB dflags (CmmReg arr) (smallArrPtrsHdrSize dflags)
-    for <- newLabelC
-    emitLabel for
-    let loopBody =
-            [ mkStore (CmmReg (CmmLocal p)) init
-            , mkAssign (CmmLocal p) (cmmOffsetW dflags (CmmReg (CmmLocal p)) 1)
-            , mkBranch for ]
-    emit =<< mkCmmIfThen
-        (cmmULtWord dflags (CmmReg (CmmLocal p))
-         (cmmOffsetW dflags (CmmReg arr)
-          (smallArrPtrsHdrSizeW dflags + n)))
+          (hdrSizeW dflags rep + n)))
         (catAGraphs loopBody)
 
     emit $ mkAssign (CmmLocal res_r) (CmmReg arr)
@@ -1785,7 +1753,7 @@ emitCloneArray info_p res_r src src_off n = do
         (mkIntExpr dflags (nonHdrSize dflags rep))
         (zeroExpr dflags)
 
-    let hdr_size = wordsToBytes dflags (fixedHdrSize dflags)
+    let hdr_size = fixedHdrSize dflags
 
     base <- allocHeapClosure rep info_ptr curCCS
                      [ (mkIntExpr dflags n,
@@ -1818,13 +1786,13 @@ emitCloneSmallArray info_p res_r src src_off n = do
     dflags <- getDynFlags
 
     let info_ptr = mkLblExpr info_p
-        rep = smallArrPtrsRep dflags n
+        rep = smallArrPtrsRep n
 
     tickyAllocPrim (mkIntExpr dflags (smallArrPtrsHdrSize dflags))
         (mkIntExpr dflags (nonHdrSize dflags rep))
         (zeroExpr dflags)
 
-    let hdr_size = wordsToBytes dflags (fixedHdrSize dflags)
+    let hdr_size = fixedHdrSize dflags
 
     base <- allocHeapClosure rep info_ptr curCCS
                      [ (mkIntExpr dflags n,
