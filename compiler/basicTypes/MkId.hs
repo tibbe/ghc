@@ -488,8 +488,8 @@ mkDataConRep dflags fam_envs wrap_name data_con
 
              wrap_sig = mkClosedStrictSig wrap_arg_dmds (dataConCPR data_con)
              wrap_arg_dmds = map mk_dmd (dropList eq_spec wrap_bangs)
-             mk_dmd str | isBanged str = evalDmd
-                        | otherwise    = topDmd
+             mk_dmd str | isBanged dflags str = evalDmd
+                        | otherwise           = topDmd
                  -- The Cpr info can be important inside INLINE rhss, where the
                  -- wrapper constructor isn't inlined.
                  -- And the argument strictness can be important too; we
@@ -533,8 +533,8 @@ mkDataConRep dflags fam_envs wrap_name data_con
     (rep_tys, rep_strs) = unzip (concat rep_tys_w_strs)
 
     wrapper_reqd = not (isNewTyCon tycon)  -- Newtypes have only a worker
-                && (any isBanged orig_bangs   -- Some forcing/unboxing
-                                              -- (includes eq_spec)
+                && (any (isBanged dflags) orig_bangs   -- Some forcing/unboxing
+                                                       -- (includes eq_spec)
                     || isFamInstTyCon tycon)  -- Cast result
 
     initial_wrap_app = Var (dataConWorkId data_con)
@@ -599,14 +599,15 @@ dataConArgRep _ _ arg_ty (HsSrcBang _ _ False)  -- No '!'
   = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep dflags fam_envs arg_ty
-    (HsSrcBang _ unpk_prag True)  -- {-# UNPACK #-} !
-  | not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
+    (HsUserBang _ unpk_prag bang)  -- TODO: All constructors
+  | strict_field_requested
+  , not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
           -- Don't unpack if we aren't optimising; rather arbitrarily,
           -- we use -fomit-iface-pragmas as the indication
   , let mb_co   = topNormaliseType_maybe fam_envs arg_ty
                      -- Unwrap type families and newtypes
         arg_ty' = case mb_co of { Just (_,ty) -> ty; Nothing -> arg_ty }
-  , isUnpackableType fam_envs arg_ty'
+  , isUnpackableType dflags fam_envs arg_ty'
   , (rep_tys, wrappers) <- dataConArgUnpack arg_ty'
   , case unpk_prag of
       Nothing -> gopt Opt_UnboxStrictFields dflags
@@ -617,9 +618,12 @@ dataConArgRep dflags fam_envs arg_ty
       Nothing          -> (HsUnpack Nothing,   rep_tys, wrappers)
       Just (co,rep_ty) -> (HsUnpack (Just co), rep_tys, wrapCo co rep_ty wrappers)
 
-  | otherwise  -- Record the strict-but-no-unpack decision
+  | strict_field_requested  -- Record the strict-but-no-unpack decision
   = strict_but_not_unpacked arg_ty
-
+  | otherwise = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+    where
+      strict_field_requested =
+          bang == Just True || bang == Nothing && xopt Opt_StrictData dflags
 dataConArgRep _ _ arg_ty HsStrict
   = strict_but_not_unpacked arg_ty
 
@@ -694,13 +698,13 @@ dataConArgUnpack arg_ty
   = pprPanic "dataConArgUnpack" (ppr arg_ty)
     -- An interface file specified Unpacked, but we couldn't unpack it
 
-isUnpackableType :: FamInstEnvs -> Type -> Bool
+isUnpackableType :: DynFlags -> FamInstEnvs -> Type -> Bool
 -- True if we can unpack the UNPACK the argument type
 -- See Note [Recursive unboxing]
 -- We look "deeply" inside rather than relying on the DataCons
 -- we encounter on the way, because otherwise we might well
 -- end up relying on ourselves!
-isUnpackableType fam_envs ty
+isUnpackableType dflags fam_envs ty
   | Just (tc, _) <- splitTyConApp_maybe ty
   , Just con <- tyConSingleAlgDataCon_maybe tc
   , isVanillaDataCon con
@@ -727,11 +731,13 @@ isUnpackableType fam_envs ty
          -- NB: dataConSrcBangs gives the *user* request;
          -- We'd get a black hole if we used dataConImplBangs
 
-    attempt_unpack (HsUnpack {})                  = True
-    attempt_unpack (HsSrcBang _ (Just unpk) bang) = bang && unpk
-    attempt_unpack (HsSrcBang _  Nothing bang)     = bang  -- Be conservative
-    attempt_unpack HsStrict                       = False
-    attempt_unpack HsNoBang                       = False
+    attempt_unpack (HsUnpack {})                          = True
+    attempt_unpack (HsUserBang _ (Just unpk) (Just bang)) = bang && unpk
+    attempt_unpack (HsUserBang _ (Just unpk) Nothing)     = xopt Opt_StrictData dflags && unpk
+    attempt_unpack (HsUserBang _ Nothing (Just bang))     = bang  -- Be conservative
+    attempt_unpack (HsUserBang _ Nothing Nothing)         = xopt Opt_StrictData dflags
+    attempt_unpack HsStrict                               = False
+    attempt_unpack HsNoBang                               = False
 
 {-
 Note [Unpack one-wide fields]

@@ -638,6 +638,7 @@ data ExtensionFlag
    | Opt_PartialTypeSignatures
    | Opt_NamedWildCards
    | Opt_StaticPointers
+   | Opt_StrictData
    deriving (Eq, Enum, Show)
 
 data SigOf = NotSigOf
@@ -3181,6 +3182,7 @@ xFlags = [
   flagSpec "UndecidableInstances"             Opt_UndecidableInstances,
   flagSpec "UnicodeSyntax"                    Opt_UnicodeSyntax,
   flagSpec "UnliftedFFITypes"                 Opt_UnliftedFFITypes,
+  flagSpec "StrictData"                       Opt_StrictData,
   flagSpec "ViewPatterns"                     Opt_ViewPatterns
   ]
 

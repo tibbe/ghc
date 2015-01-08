@@ -67,6 +67,7 @@ import BasicTypes
 import FastString
 import Module
 import VarEnv
+import DynFlags
 
 import qualified Data.Data as Data
 import qualified Data.Typeable
@@ -459,7 +460,8 @@ data HsBang
        (Maybe Bool)       -- Just True    {-# UNPACK #-}
                           -- Just False   {-# NOUNPACK #-}
                           -- Nothing      no pragma
-       Bool               -- True <=> '!' specified
+       (Maybe Bool)       -- True <=> '!' specified, False <=> '~'
+       -- specified, Nothing <=> unspecified
        -- (HsSrcBang (Just True) False) makes no sense
        -- We emit a warning (in checkValidDataCon) and treat it
        -- just like (HsSrcBang Nothing False)
@@ -578,10 +580,14 @@ instance Data.Data DataCon where
 
 instance Outputable HsBang where
     ppr HsNoBang                = empty
-    ppr (HsSrcBang _ prag bang) = pp_unpk prag <+> ppWhen bang (char '!')
+    ppr (HsSrcBang _ prag bang) = pp_unpk prag <+> ppBang bang
+      where
+        ppBang Nothing      = empty
+        ppBang (Just True)  = (char '!')
+        ppBang (Just False) = (char '~')
     ppr (HsUnpack Nothing)      = ptext (sLit "Unpk")
     ppr (HsUnpack (Just co))    = ptext (sLit "Unpk") <> parens (ppr co)
-    ppr HsStrict                = ptext (sLit "SrictNotUnpacked")
+    ppr HsStrict                = ptext (sLit "StrictNotUnpacked")
 
 pp_unpk :: Maybe Bool -> SDoc
 pp_unpk Nothing      = empty
@@ -601,11 +607,13 @@ eqHsBang (HsUnpack Nothing)   (HsUnpack Nothing)   = True
 eqHsBang (HsUnpack (Just c1)) (HsUnpack (Just c2)) = eqType (coercionType c1) (coercionType c2)
 eqHsBang _ _ = False
 
-isBanged :: HsBang -> Bool
-isBanged HsNoBang             = False
-isBanged (HsSrcBang _ _ bang) = bang
-isBanged (HsUnpack {})        = True
-isBanged (HsStrict {})        = True
+-- | Is the field strict?
+isBanged :: DynFlags -> HsBang -> Bool
+isBanged dflags HsNoBang                    = xopt Opt_StrictData dflags
+isBanged dflags (HsSrcBang _ _ Nothing)     = xopt Opt_StrictData dflags
+isBanged dflags (HsSrcBang _ _ (Just bang)) = bang
+isBanged (HsUnpack {})                      = True
+isBanged (HsStrict {})                      = True
 
 isMarkedStrict :: StrictnessMark -> Bool
 isMarkedStrict NotMarkedStrict = False
