@@ -44,3 +44,4 @@ test('DsStaticPointers',
      when(compiler_lt('ghc', '7.9'), skip), compile_and_run, [''])
 test('T8952', normal, compile_and_run, [''])
 test('T9844', normal, compile_and_run, [''])
+test('DsStrictData', normal, compile_and_run, [''])

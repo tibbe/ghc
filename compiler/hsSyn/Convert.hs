@@ -438,12 +438,13 @@ cvtConstr (ForallC tvs ctxt con)
 
 cvt_arg :: (TH.Strict, TH.Type) -> CvtM (LHsType RdrName)
 cvt_arg (NotStrict, ty) = cvtType ty
+-- TODO: Do we need output Nothing instead of (Just True) if we're using -XStrictData?
 cvt_arg (IsStrict,  ty)
   = do { ty' <- cvtType ty
-       ; returnL $ HsBangTy (HsSrcBang Nothing Nothing     True) ty' }
+       ; returnL $ HsBangTy (HsSrcBang Nothing Nothing     (Just True)) ty' }
 cvt_arg (Unpacked,  ty)
-  = do { ty' <- cvtType ty
-       ; returnL $ HsBangTy (HsSrcBang Nothing (Just True) True) ty' }
+   do { ty' <- cvtType ty
+      ; returnL $ HsBangTy (HsSrcBang Nothing (Just True) (Just True)) ty' }
 
 cvt_id_arg :: (TH.Name, TH.Strict, TH.Type) -> CvtM (LConDeclField RdrName)
 cvt_id_arg (i, str, ty)

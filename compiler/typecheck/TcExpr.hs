@@ -1381,29 +1381,31 @@ checkMissingFields :: DataCon -> HsRecordBinds Name -> TcM ()
 checkMissingFields data_con rbinds
   | null field_labels   -- Not declared as a record;
                         -- But C{} is still valid if no strict fields
-  = if any isBanged field_strs then
-        -- Illegal if any arg is strict
-        addErrTc (missingStrictFields data_con [])
-    else
-        return ()
+  = do dflags <- getDynFlags
+       if any (isBanged dflags) field_strs then
+           -- Illegal if any arg is strict
+           addErrTc (missingStrictFields data_con [])
+       else
+           return ()
 
   | otherwise = do              -- A record
-    unless (null missing_s_fields)
-           (addErrTc (missingStrictFields data_con missing_s_fields))
+    dflags <- getDynFlags
+    unless (null (missing_s_fields dflags))
+           (addErrTc (missingStrictFields data_con (missing_s_fields dflags)))
 
     warn <- woptM Opt_WarnMissingFields
-    unless (not (warn && notNull missing_ns_fields))
-           (warnTc True (missingFields data_con missing_ns_fields))
+    unless (not (warn && notNull (missing_ns_fields dflags)))
+           (warnTc True (missingFields data_con (missing_ns_fields dflags)))
 
   where
-    missing_s_fields
+    missing_s_fields dflags
         = [ fl | (fl, str) <- field_info,
-                 isBanged str,
+                 isBanged dflags str,
                  not (fl `elem` field_names_used)
           ]
-    missing_ns_fields
+    missing_ns_fields dflags
         = [ fl | (fl, str) <- field_info,
-                 not (isBanged str),
+                 not (isBanged dflags str),
                  not (fl `elem` field_names_used)
           ]
 

@@ -1408,17 +1408,23 @@ sigtypes1 :: { (OrdList (LHsType RdrName)) }      -- Always HsForAllTys
 
 strict_mark :: { Located ([AddAnn],HsBang) }
         : '!'                        { sL1 $1 ([mj AnnBang $1]
-                                              ,HsSrcBang Nothing                       Nothing      True) }
+                                              ,HsSrcBang Nothing                       Nothing      (Just True)) }
+        : '~'                        { sL1 $1 ([mj AnnBang $1]
+                                              ,HsSrcBang Nothing                       Nothing      (Just True)) }
         | '{-# UNPACK' '#-}'         { sLL $1 $> ([mo $1,mc $2]
-                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  False) }
+                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  Nothing) }
         | '{-# NOUNPACK' '#-}'       { sLL $1 $> ([mo $1,mc $2]
-                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just False) False) }
+                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just False) Nothing) }
         | '{-# UNPACK' '#-}' '!'     { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
-                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  True) }
+                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  (Just True)) }
         | '{-# NOUNPACK' '#-}' '!'   { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
-                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just False) True) }
-        -- Although UNPACK with no '!' is illegal, we get a
-        -- better error message if we parse it here
+                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just False) (Just True)) }
+        | '{-# UNPACK' '#-}' '~'     { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
+                                              ,HsSrcBang (Just $ getUNPACK_PRAGs $1)   (Just True)  (Just False)) }
+        | '{-# NOUNPACK' '#-}' '~'   { sLL $1 $> ([mo $1,mc $2,mj AnnBang $3]
+                                              ,HsSrcBang (Just $ getNOUNPACK_PRAGs $1) (Just False) (Just False)) }
+        -- Although UNPACK with no '!' and UNPACK with '~' are illegal, we get a
+        -- better error message if we parse them here
 
 -- A ctype is a for-all type
 ctype   :: { LHsType RdrName }

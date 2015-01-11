@@ -1591,15 +1591,16 @@ checkValidDataCon dflags existential_ok tc con
     }
   where
     ctxt = ConArgCtxt (dataConName con)
-    check_bang (HsSrcBang _ (Just want_unpack) has_bang, rep_bang, n)
-      | want_unpack, not has_bang
+    check_bang (HsSrcBang _ (Just want_unpack) mb_bang, rep_bang, n)
+      | want_unpack, not is_strict
       = addWarnTc (bad_bang n (ptext (sLit "UNPACK pragma lacks '!'")))
       | want_unpack
       , case rep_bang of { HsUnpack {} -> False; _ -> True }
       , not (gopt Opt_OmitInterfacePragmas dflags)
-           -- If not optimising, se don't unpack, so don't complain!
+           -- If not optimising, we don't unpack, so don't complain!
            -- See MkId.dataConArgRep, the (HsBang True) case
       = addWarnTc (bad_bang n (ptext (sLit "Ignoring unusable UNPACK pragma")))
+      where is_strict = mb_bang == Just True || xopt Opt_StrictData dflags
 
     check_bang _
       = return ()
@@ -1625,7 +1626,8 @@ checkNewDataCon con
           ptext (sLit "A newtype constructor cannot have existential type variables")
                 -- No existentials
 
-        ; checkTc (not (any isBanged (dataConSrcBangs con)))
+        ; dflags <- getDynFlags
+        ; checkTc (not (any (isBanged dflags) (dataConSrcBangs con)))
                   (newtypeStrictError con)
                 -- No strictness
     }

@@ -609,11 +609,11 @@ eqHsBang _ _ = False
 
 -- | Is the field strict?
 isBanged :: DynFlags -> HsBang -> Bool
-isBanged dflags HsNoBang                    = xopt Opt_StrictData dflags
-isBanged dflags (HsSrcBang _ _ Nothing)     = xopt Opt_StrictData dflags
-isBanged dflags (HsSrcBang _ _ (Just bang)) = bang
-isBanged (HsUnpack {})                      = True
-isBanged (HsStrict {})                      = True
+isBanged dflags HsNoBang                = xopt Opt_StrictData dflags
+isBanged dflags (HsSrcBang _ _ Nothing) = xopt Opt_StrictData dflags
+isBanged _ (HsSrcBang _ _ (Just bang))  = bang
+isBanged _ (HsUnpack {})                = True
+isBanged _ (HsStrict {})                = True
 
 isMarkedStrict :: StrictnessMark -> Bool
 isMarkedStrict NotMarkedStrict = False

@@ -592,14 +592,16 @@ dataConArgRep
       , [(Type, StrictnessMark)]   -- Rep types
       , (Unboxer, Boxer) )
 
-dataConArgRep _ _ arg_ty HsNoBang
-  = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+-- TODO: Might need to unpack.
+dataConArgRep dflags _ arg_ty HsNoBang
+  | xopt Opt_StrictData dflags = strict_but_not_unpacked arg_ty
+  | otherwise = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
-dataConArgRep _ _ arg_ty (HsSrcBang _ _ False)  -- No '!'
-  = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
+-- dataConArgRep _ _ arg_ty (HsSrcBang _ _ False)  -- No '!'
+--   = (HsNoBang, [(arg_ty, NotMarkedStrict)], (unitUnboxer, unitBoxer))
 
 dataConArgRep dflags fam_envs arg_ty
-    (HsUserBang _ unpk_prag bang)  -- TODO: All constructors
+    (HsSrcBang _ unpk_prag bang)  -- TODO: All constructors
   | strict_field_requested
   , not (gopt Opt_OmitInterfacePragmas dflags) -- Don't unpack if -fomit-iface-pragmas
           -- Don't unpack if we aren't optimising; rather arbitrarily,
@@ -731,13 +733,13 @@ isUnpackableType dflags fam_envs ty
          -- NB: dataConSrcBangs gives the *user* request;
          -- We'd get a black hole if we used dataConImplBangs
 
-    attempt_unpack (HsUnpack {})                          = True
-    attempt_unpack (HsUserBang _ (Just unpk) (Just bang)) = bang && unpk
-    attempt_unpack (HsUserBang _ (Just unpk) Nothing)     = xopt Opt_StrictData dflags && unpk
-    attempt_unpack (HsUserBang _ Nothing (Just bang))     = bang  -- Be conservative
-    attempt_unpack (HsUserBang _ Nothing Nothing)         = xopt Opt_StrictData dflags
-    attempt_unpack HsStrict                               = False
-    attempt_unpack HsNoBang                               = False
+    attempt_unpack (HsUnpack {})                         = True
+    attempt_unpack (HsSrcBang _ (Just unpk) (Just bang)) = bang && unpk
+    attempt_unpack (HsSrcBang _ (Just unpk) Nothing)     = xopt Opt_StrictData dflags && unpk
+    attempt_unpack (HsSrcBang _ Nothing (Just bang))     = bang  -- Be conservative
+    attempt_unpack (HsSrcBang _ Nothing Nothing)         = xopt Opt_StrictData dflags
+    attempt_unpack HsStrict                              = False
+    attempt_unpack HsNoBang                              = False
 
 {-
 Note [Unpack one-wide fields]
