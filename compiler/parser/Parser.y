@@ -1634,7 +1634,7 @@ atype :: { LHsType RdrName }
                                              [mo $1,mc $2] }
         | '(#' comma_types1 '#)'      {% ams (sLL $1 $> $ HsTupleTy HsUnboxedTuple $2)
                                              [mo $1,mc $3] }
-        | '(#' bar_types2 '#)'        {% ams (sLL $1 $> $ HsSumTy $2)
+        | '(#' bar_types2 '#)'        {% ams (sLL $1 $> $ HsUSumTy $2)
                                              [mo $1,mc $3] }
         | '[' ctype ']'               {% ams (sLL $1 $> $ HsListTy  $2) [mos $1,mcs $3] }
         | '[:' ctype ':]'             {% ams (sLL $1 $> $ HsPArrTy  $2) [mo $1,mc $3] }
@@ -1697,7 +1697,7 @@ comma_types1    :: { [LHsType RdrName] }  -- One or more:  ty,ty,ty
                                           >> return ($1 : $3) }
 
 bar_types2    :: { [LHsType RdrName] }  -- Two or more:  ty|ty|ty
-        : ctype  '|' ctype             { [$1,$2] }
+        : ctype  '|' ctype             { [$1,$3] }
         | ctype  '|' bar_types2        {% addAnnotation (gl $1) AnnBar (gl $2)
                                           >> return ($1 : $3) }
 
