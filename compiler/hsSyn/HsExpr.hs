@@ -197,6 +197,11 @@ data HsExpr id
         [LHsTupArg id]
         Boxity
 
+  | HsSum Int    -- Alternative (0-based)
+          Arity  -- Sum arity
+          (LHsExpr id)
+  
+
   -- | - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnCase',
   --       'ApiAnnotation.AnnOf','ApiAnnotation.AnnOpen' @'{'@,
   --       'ApiAnnotation.AnnClose' @'}'@
@@ -653,6 +658,11 @@ ppr_expr (ExplicitTuple exprs boxity)
     punc (Present {} : _) = comma <> space
     punc (Missing {} : _) = comma
     punc []               = empty
+
+ppr_expr (HsSum alt arity expr)
+  = text "(#" <+> ppr_bars alt <+> ppr expr <+> ppr_bars (arity - 1 - alt) <+> text "#)"
+  where
+    ppr_bars n = hsep (replicate n (char '|'))
 
 ppr_expr (HsLam matches)
   = pprMatches (LambdaExpr :: HsMatchContext id) matches

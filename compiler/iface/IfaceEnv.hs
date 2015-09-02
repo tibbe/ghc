@@ -34,6 +34,7 @@ import FastString
 import UniqSupply
 import SrcLoc
 import Util
+import PrelNames (gHC_PRIM)
 
 import Outputable
 
@@ -181,7 +182,7 @@ See Note [The Name Cache] above.
 
 Note [Built-in syntax and the OrigNameCache]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-You might think that usin isBuiltInOcc_maybe in lookupOrigNameCache is
+You might think that using isBuiltInOcc_maybe in lookupOrigNameCache is
 unnecessary because tuple TyCon/DataCons are parsed as Exact RdrNames
 and *don't* appear as original names in interface files (because
 serialization gives them special treatment), so we will never look
@@ -200,11 +201,15 @@ However, there are two reasons why we might look up an Orig RdrName:
 
 lookupOrigNameCache :: OrigNameCache -> Module -> OccName -> Maybe Name
 lookupOrigNameCache nc mod occ
+  | pprTrace "lookupOrigNameCache" (ppr occ) False = undefined
   | Just name <- isBuiltInOcc_maybe occ
   =     -- See Note [Known-key names], 3(c) in PrelNames
         -- Special case for tuples; there are too many
         -- of them to pre-populate the original-name cache
     Just name
+
+  | mod == gHC_PRIM && occNameString occ == "Sum_2#" = Just $ getName (sumTyCon 2)
+  | mod == gHC_PRIM && occNameString occ == "Sum_0_2#" = Just $ getName (sumDataCon 0 2)
 
   | otherwise
   = case lookupModuleEnv nc mod of

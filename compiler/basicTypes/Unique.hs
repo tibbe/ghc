@@ -43,6 +43,7 @@ module Unique (
         mkAlphaTyVarUnique,
         mkPrimOpIdUnique,
         mkTupleTyConUnique, mkTupleDataConUnique,
+        mkSumTyConUnique, mkSumDataConUnique,
         mkCTupleTyConUnique,
         mkPreludeMiscIdUnique, mkPreludeDataConUnique,
         mkPreludeTyConUnique, mkPreludeClassUnique,
@@ -273,15 +274,20 @@ Allocation of unique supply characters:
         n       Native codegen
         r       Hsc name cache
         s       simplifier
+        z       unboxed sums
 -}
 
 mkAlphaTyVarUnique     :: Int -> Unique
 mkPreludeClassUnique   :: Int -> Unique
 mkPreludeTyConUnique   :: Int -> Unique
 mkTupleTyConUnique     :: Boxity -> Arity -> Unique
+mkSumTyConUnique       :: Arity -> Unique
 mkCTupleTyConUnique    :: Arity -> Unique
 mkPreludeDataConUnique :: Arity -> Unique
 mkTupleDataConUnique   :: Boxity -> Arity -> Unique
+mkSumDataConUnique     :: Int    -- ^ Alternative
+                       -> Arity  -- ^ Arity
+                       -> Unique
 mkPrimOpIdUnique       :: Int -> Unique
 mkPreludeMiscIdUnique  :: Int -> Unique
 mkPArrDataConUnique    :: Int -> Unique
@@ -296,6 +302,7 @@ mkPreludeClassUnique i = mkUnique '2' i
 mkPreludeTyConUnique i       = mkUnique '3' (3*i)
 mkTupleTyConUnique Boxed   a = mkUnique '4' (3*a)
 mkTupleTyConUnique Unboxed a = mkUnique '5' (3*a)
+mkSumTyConUnique           a = mkUnique 'z' (3*a)
 mkCTupleTyConUnique        a = mkUnique 'k' (3*a)
 
 -- Data constructor keys occupy *two* slots.  The first is used for the
@@ -307,6 +314,10 @@ mkCTupleTyConUnique        a = mkUnique 'k' (3*a)
 mkPreludeDataConUnique i       = mkUnique '6' (2*i)    -- Must be alphabetic
 mkTupleDataConUnique Boxed   a = mkUnique '7' (2*a)        -- ditto (*may* be used in C labels)
 mkTupleDataConUnique Unboxed a = mkUnique '8' (2*a)
+mkSumDataConUnique a b | a >= b =
+    panic ("mkSumDataConUnique: index out of bounds: "
+           ++ show a ++ " >= " ++ show b)
+mkSumDataConUnique         a b = mkUnique 'z' (2*a*b)
 
 mkPrimOpIdUnique op         = mkUnique '9' op
 mkPreludeMiscIdUnique  i    = mkUnique '0' i
