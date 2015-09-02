@@ -63,6 +63,9 @@ module TysWiredIn (
         unboxedPairTyCon, unboxedPairDataCon,
         cTupleTyConName, cTupleTyConNames, isCTupleTyConName,
 
+        -- * Sums
+        mkSumTy, sumTyCon, sumDataCon,
+
         -- * Kinds
         typeNatKindCon, typeNatKind, typeSymbolKindCon, typeSymbolKind,
 
@@ -95,7 +98,7 @@ import TysPrim
 -- others:
 import CoAxiom
 import Coercion
-import Constants        ( mAX_TUPLE_SIZE, mAX_CTUPLE_SIZE )
+import Constants        ( mAX_TUPLE_SIZE, mAX_CTUPLE_SIZE, mAX_SUM_SIZE )
 import Module           ( Module )
 import Type             ( mkTyConApp )
 import DataCon
@@ -371,7 +374,7 @@ Note [How tuples work]  See also Note [Known-key names] in PrelNames
       pretty-print saturated constraint tuples with round parens; see
       BasicTypes.tupleParens.
 
-* In quite a lot of places things are restrcted just to
+* In quite a lot of places things are restricted just to
   BoxedTuple/UnboxedTuple, and then we used BasicTypes.Boxity to distinguish
   E.g. tupleTyCon has a Boxity argument
 
@@ -545,6 +548,75 @@ unboxedPairTyCon = tupleTyCon Unboxed 2
 
 unboxedPairDataCon :: DataCon
 unboxedPairDataCon = tupleDataCon Unboxed 2
+
+{-
+************************************************************************
+*                                                                      *
+      Unboxed sums
+*                                                                      *
+************************************************************************
+-}
+
+-- | OccName for n-ary unboxed sum type constructor.
+mkSumTyConOcc :: Arity -> OccName
+mkSumTyConOcc n = mkOccName tcName str
+  where
+    -- No need to cache these, the caching is done in mk_sum
+    str = '|' : '#' : bars ++ "#|"
+    bars = replicate (n-1) '|'
+
+-- | OccName for i-th alternative of n-ary unboxed sum data constructor.
+mkSumDataConOcc :: AltIx -> Arity -> OccName
+mkSumDataConOcc i n = mkOccName dataName str
+  where
+    -- No need to cache these, the caching is done in mk_sum
+    str = "Sum_" ++ show i ++ "_" ++ show n ++ "#"
+
+-- | Type constructor for n-ary unboxed sum.
+sumTyCon :: Arity -> TyCon
+sumTyCon n | n > mAX_SUM_SIZE = fst (mk_sum n)  -- Build one specially
+sumTyCon n = fst (unboxedSumArr ! n)
+
+-- | The zero-based of alternatives in a sum.
+type AltIx = Int
+
+-- | Data constructor for i:th alternative of a n-ary unboxed sum.
+sumDataCon :: AltIx  -- ^ Alternative
+           -> Arity  -- ^ Arity
+           -> DataCon
+sumDataCon i n | i >= n = panic ("sumDataCon: index out of bounds: "
+                                 ++ show i ++ " >= " ++ show n)
+sumDataCon i n | n > mAX_SUM_SIZE = snd (mk_sum n) ! i  -- Build one specially
+sumDataCon i n = snd (unboxedSumArr ! n) ! i
+
+-- | Cached type and data constructors for sums. The outer array is
+-- indexed by the arity of the sum and the inner array is indexed by
+-- the alternative.
+unboxedSumArr :: Array Int (TyCon, Array Int DataCon)
+unboxedSumArr = listArray (0,mAX_SUM_SIZE) [mk_sum i | i <- [0..mAX_SUM_SIZE]]
+
+-- | Create type constructor and data constructors for n-ary unboxed sum.
+mk_sum :: Int -> (TyCon, Array Int DataCon)
+mk_sum arity = (tycon, sum_cons)
+  where
+    tycon   = mkSumTyCon tc_name tc_kind arity openAlphaTyVars (elems sum_cons)
+                         NoParentTyCon
+
+    tc_name = mkWiredInName gHC_PRIM (mkSumTyConOcc arity) tc_uniq
+                            (ATyCon tycon) BuiltInSyntax
+    tc_kind = mkArrowKinds (map tyVarKind openAlphaTyVars) unliftedTypeKind
+
+    sum_cons = listArray (0,mAX_SUM_SIZE) [sum_con i | i <- [0..arity-1]]
+    sum_con i = let dc = pcDataCon dc_name openAlphaTyVars tyvar_tys tycon
+                    dc_name = mkWiredInName gHC_PRIM
+                                            (mkSumDataConOcc i arity)
+                                            (dc_uniq i)
+                                            (AConLike (RealDataCon dc))
+                                            BuiltInSyntax
+                in dc
+    tyvar_tys = mkTyVarTys openAlphaTyVars
+    tc_uniq   = mkSumTyConUnique   arity
+    dc_uniq i = mkSumDataConUnique i arity
 
 {-
 ************************************************************************
@@ -798,6 +870,15 @@ mkBoxedTupleTy tys = mkTupleTy Boxed tys
 unitTy :: Type
 unitTy = mkTupleTy Boxed []
 
+{- *********************************************************************
+*                                                                      *
+            The sum types
+*                                                                      *
+************************************************************************
+-}
+
+mkSumTy :: [Type] -> Type
+mkSumTy tys = mkTyConApp (sumTyCon (length tys)) tys
 
 {- *********************************************************************
 *                                                                      *

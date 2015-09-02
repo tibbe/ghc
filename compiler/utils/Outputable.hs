@@ -17,13 +17,14 @@ module Outputable (
         SDoc, runSDoc, initSDocContext,
         docToSDoc,
         interppSP, interpp'SP, pprQuotedList, pprWithCommas, quotedListWithOr,
+        pprWithBars,
         empty, nest,
         char,
         text, ftext, ptext, ztext,
         int, intWithCommas, integer, float, double, rational,
         parens, cparen, brackets, braces, quotes, quote,
         doubleQuotes, angleBrackets, paBrackets,
-        semi, comma, colon, dcolon, space, equals, dot,
+        semi, comma, colon, dcolon, space, equals, dot, bar,
         arrow, larrow, darrow, arrowt, larrowt, arrowtt, larrowtt,
         lparen, rparen, lbrack, rbrack, lbrace, rbrace, underscore,
         blankLine, forAllLit,
@@ -106,6 +107,7 @@ import System.IO        ( Handle )
 import System.FilePath
 import Text.Printf
 import Data.Graph (SCC(..))
+import Data.List (intersperse)
 
 import GHC.Fingerprint
 import GHC.Show         ( showMultiLineString )
@@ -535,6 +537,7 @@ equals     = docToSDoc $ Pretty.equals
 space      = docToSDoc $ Pretty.space
 underscore = char '_'
 dot        = char '.'
+bar        = char '|'
 lparen     = docToSDoc $ Pretty.lparen
 rparen     = docToSDoc $ Pretty.rparen
 lbrack     = docToSDoc $ Pretty.lbrack
@@ -884,6 +887,12 @@ pprWithCommas :: (a -> SDoc) -- ^ The pretty printing function to use
               -> SDoc        -- ^ 'SDoc' where the things have been pretty printed,
                              -- comma-separated and finally packed into a paragraph.
 pprWithCommas pp xs = fsep (punctuate comma (map pp xs))
+
+pprWithBars :: (a -> SDoc) -- ^ The pretty printing function to use
+            -> [a]         -- ^ The things to be pretty printed
+            -> SDoc        -- ^ 'SDoc' where the things have been pretty printed,
+                           -- bar-separated and finally packed into a paragraph.
+pprWithBars pp xs = fsep (intersperse bar (map pp xs))
 
 -- | Returns the separated concatenation of the pretty printed things.
 interppSP  :: Outputable a => [a] -> SDoc

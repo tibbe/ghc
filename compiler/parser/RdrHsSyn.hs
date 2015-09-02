@@ -56,7 +56,8 @@ module RdrHsSyn (
         -- Help with processing exports
         ImpExpSubSpec(..),
         mkModuleImpExp,
-        mkTypeImpExp
+        mkTypeImpExp,
+        mkSumOrTuple
 
     ) where
 
@@ -1332,3 +1333,13 @@ mkTypeImpExp name =
 
 parseErrorSDoc :: SrcSpan -> SDoc -> P a
 parseErrorSDoc span s = failSpanMsgP span s
+
+-- TODO: Get the exact source loc of the whole experssion.
+mkSumOrTuple :: Boxity -> Either (Int, Int, LHsExpr RdrName) [LHsTupArg RdrName]
+             -> P (HsExpr RdrName)
+mkSumOrTuple Unboxed (Left (i, n, e))     = return $ HsSum i n e
+mkSumOrTuple boxity (Right es)            = return $ ExplicitTuple es boxity
+mkSumOrTuple Boxed (Left (_, _, (L l e))) =
+    parseErrorSDoc l $
+    hang (text "Boxed sums not supported:")
+    2 (ppr e)
