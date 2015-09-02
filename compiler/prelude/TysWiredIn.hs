@@ -617,22 +617,24 @@ unboxedSumArr = listArray (0,mAX_SUM_SIZE) [mk_sum i | i <- [0..mAX_SUM_SIZE]]
 mk_sum :: Int -> (TyCon, Array Int DataCon)
 mk_sum arity = (tycon, sum_cons)
   where
-    tycon   = mkSumTyCon tc_name tc_kind arity openAlphaTyVars (elems sum_cons)
+    tycon   = mkSumTyCon tc_name tc_kind arity tyvars (elems sum_cons)
                          NoParentTyCon
 
     tc_name = mkWiredInName gHC_PRIM (mkSumTyConOcc arity) tc_uniq
                             (ATyCon tycon) BuiltInSyntax
-    tc_kind = mkArrowKinds (map tyVarKind openAlphaTyVars) unliftedTypeKind
+    tc_kind = mkArrowKinds (map tyVarKind tyvars) unliftedTypeKind
+
+    tyvars = take arity openAlphaTyVars
 
     sum_cons = listArray (0,mAX_SUM_SIZE) [sum_con i | i <- [0..arity-1]]
-    sum_con i = let dc = pcDataCon dc_name openAlphaTyVars tyvar_tys tycon
+    sum_con i = let dc = pcDataCon dc_name tyvars tyvar_tys tycon
                     dc_name = mkWiredInName gHC_PRIM
                                             (mkSumDataConOcc i arity)
                                             (dc_uniq i)
                                             (AConLike (RealDataCon dc))
                                             BuiltInSyntax
                 in dc
-    tyvar_tys = mkTyVarTys openAlphaTyVars
+    tyvar_tys = mkTyVarTys tyvars
     tc_uniq   = mkSumTyConUnique   arity
     dc_uniq i = mkSumDataConUnique i arity
 
