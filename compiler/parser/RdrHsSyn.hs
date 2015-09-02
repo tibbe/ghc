@@ -1340,7 +1340,7 @@ parseErrorSDoc span s = failSpanMsgP span s
 -- TODO: Get the exact source loc of the whole experssion.
 mkSumOrTuple :: Boxity -> Either (Int, Int, LHsExpr RdrName) [LHsTupArg RdrName]
              -> P (HsExpr RdrName)
-mkSumOrTuple Unboxed (Left (i, n, e))     = return $ HsSum i n e
+mkSumOrTuple Unboxed (Left (i, n, e))     = return $ HsSum i n e PlaceHolder
 mkSumOrTuple boxity (Right es)            = return $ ExplicitTuple es boxity
 mkSumOrTuple Boxed (Left (_, _, (L l e))) =
     parseErrorSDoc l $

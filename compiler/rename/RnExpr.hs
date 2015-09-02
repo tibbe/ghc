@@ -246,6 +246,10 @@ rnExpr (ExplicitTuple tup_args boxity)
     rnTupArg (L l (Missing _)) = return (L l (Missing placeHolderType)
                                         , emptyFVs)
 
+rnExpr (HsSum selector arity expr _)
+  = do { (expr', fvs) <- rnExpr expr
+       ; return (HsSum selector arity expr' PlaceHolder, fvs) }
+
 rnExpr (RecordCon con_id _ rbinds)
   = do  { conname <- lookupLocatedOccRn con_id
         ; (rbinds', fvRbinds) <- rnHsRecBinds (HsRecFieldCon (unLoc conname)) rbinds

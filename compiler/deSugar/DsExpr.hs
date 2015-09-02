@@ -295,6 +295,11 @@ dsExpr (ExplicitTuple tup_args boxity)
                   mkCoreConApps (tupleDataCon boxity (length tup_args))
                                 (map (Type . exprType) args ++ args) }
 
+dsExpr (HsSum selector arity expr types)
+  = do { core_expr <- dsLExpr expr
+       ; return $ mkCoreConApps (sumDataCon selector arity)
+                                (map Type types ++ [core_expr]) }
+
 dsExpr (HsSCC _ cc expr@(L loc _)) = do
     dflags <- getDynFlags
     if gopt Opt_SccProfilingOn dflags
