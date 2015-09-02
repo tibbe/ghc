@@ -200,7 +200,8 @@ data HsExpr id
   | HsSum Int    -- Alternative (0-based)
           Arity  -- Sum arity
           (LHsExpr id)
-  
+          PostTc id [Type]   -- the type arguments
+
 
   -- | - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnCase',
   --       'ApiAnnotation.AnnOf','ApiAnnotation.AnnOpen' @'{'@,
@@ -659,7 +660,7 @@ ppr_expr (ExplicitTuple exprs boxity)
     punc (Missing {} : _) = comma
     punc []               = empty
 
-ppr_expr (HsSum alt arity expr)
+ppr_expr (HsSum alt arity expr _)
   = text "(#" <+> ppr_bars alt <+> ppr expr <+> ppr_bars (arity - 1 - alt) <+> text "#)"
   where
     ppr_bars n = hsep (replicate n (char '|'))
