@@ -2389,7 +2389,7 @@ tup_exprs :: { Either (Int, Int, LHsExpr RdrName) [LHsTupArg RdrName] }
                                 ; return (Right ((sL1 $1 (Present $1)) : snd $2)) } }
 
            | texp bars
-                          {% do { addAnnotation (gl $1) AnnBar (fst $2)
+                          {% do { mapM_ (\ll -> addAnnotation ll AnnComma ll) (fst $2)
                                 ; return (Left (0, snd $2 + 1, $1)) } }
 
            | commas tup_tail
