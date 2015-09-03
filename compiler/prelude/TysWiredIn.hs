@@ -425,6 +425,7 @@ isBuiltInOcc_maybe occ
       | tail_matches sort rest  = tup_name sort n
       | otherwise               = Nothing
 
+    -- TODO: Parse "_"
     parse_sum n rest
       | (' ':'|':' ' : rest2) <- rest = parse_sum (n+1) rest2
       | ('#':')':'_' : rest2) <- rest, [(alt, "")] <- reads rest2 =
@@ -592,12 +593,12 @@ mkSumTyConOcc n = mkOccName tcName str
     bars = concat $ replicate (n-1) " |"
 
 -- | OccName for i-th alternative of n-ary unboxed sum data constructor.
-mkSumDataConOcc :: Int -> Arity -> OccName
+mkSumDataConOcc :: AltIx -> Arity -> OccName
 mkSumDataConOcc alt n = mkOccName dataName str
   where
     -- No need to cache these, the caching is done in mk_sum
-    str = '(' : '#' : bars ++ " #)_" ++ show alt
-    bars = concat $ replicate (n-1) " |"
+    str = '(' : '#' : bars alt ++ " _" ++ bars (n - alt - 1) ++ " #)"
+    bars i = concat $ replicate i " |"
 
 -- | Type constructor for n-ary unboxed sum.
 sumTyCon :: Arity -> TyCon
@@ -605,7 +606,7 @@ sumTyCon n | n > mAX_SUM_SIZE = fst (mk_sum n)  -- Build one specially
 sumTyCon n = fst (unboxedSumArr ! n)
 
 -- | The zero-based of alternatives in a sum.
-type AltIx = Int
+type AltIx = Int  -- TODO: Change to ConTag
 
 -- | Data constructor for i:th alternative of a n-ary unboxed sum.
 sumDataCon :: AltIx  -- ^ Alternative

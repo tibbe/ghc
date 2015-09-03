@@ -36,6 +36,7 @@ module TyCon(
         isFunTyCon,
         isPrimTyCon,
         isTupleTyCon, isUnboxedTupleTyCon, isBoxedTupleTyCon,
+        isUnboxedSumTyCon,
         isTypeSynonymTyCon,
         mightBeUnsaturatedTyCon,
         isPromotedDataCon, isPromotedTyCon,
@@ -1524,6 +1525,13 @@ isBoxedTupleTyCon (AlgTyCon { algTcRhs = rhs })
   | TupleTyCon { tup_sort = sort } <- rhs
   = isBoxed (tupleSortBoxity sort)
 isBoxedTupleTyCon _ = False
+
+-- | Is this the 'TyCon' for an unboxed sum?
+isUnboxedSumTyCon :: TyCon -> Bool
+isUnboxedSumTyCon (AlgTyCon { algTcRhs = rhs })
+  | SumTyCon {} <- rhs
+  = True
+isUnboxedSumTyCon _ = False
 
 -- | Is this a recursive 'TyCon'?
 isRecursiveTyCon :: TyCon -> Bool
