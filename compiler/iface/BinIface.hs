@@ -402,14 +402,14 @@ getSymtabName _ncu _dict symtab bh = do
                          _ -> pprPanic "getSymtabName:unknown tuple sort" (ppr i)
                 thing_tag = (i .&. 0x06FFFFFF) `shiftR` 25
                 arity = fromIntegral (i .&. 0x01FFFFFF)
-            1 -> return $! case sort of
+            1 -> return $! case thing of
                 0 -> tyConName $ sumTyCon arity
                   where arity = fromIntegral (i .&. 0x0FFFFFFF)
                 1 -> dataConName $ sumDataCon alt arity
                   where arity = fromIntegral (i .&. 0x0FFFFFFF `shiftR` 14)
                         alt = fromIntegral (i .&. 0x00003FFF)
               where
-                sort = (i .&. 0x10000000) `shiftR` 28
+                thing = (i .&. 0x10000000) `shiftR` 28
         _          -> pprPanic "getSymtabName:unknown name tag" (ppr i)
 
 data BinSymbolTable = BinSymbolTable {
