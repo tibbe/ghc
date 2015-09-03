@@ -584,6 +584,7 @@ data ExtensionFlag
    | Opt_ScopedTypeVariables
    | Opt_AllowAmbiguousTypes
    | Opt_UnboxedTuples
+   | Opt_UnboxedSums
    | Opt_BangPatterns
    | Opt_TypeFamilies
    | Opt_OverloadedStrings
@@ -3224,6 +3225,7 @@ xFlags = [
   flagSpec "TypeOperators"                    Opt_TypeOperators,
   flagSpec "TypeSynonymInstances"             Opt_TypeSynonymInstances,
   flagSpec "UnboxedTuples"                    Opt_UnboxedTuples,
+  flagSpec "UnboxedSums"                      Opt_UnboxedSums,
   flagSpec "UndecidableInstances"             Opt_UndecidableInstances,
   flagSpec "UnicodeSyntax"                    Opt_UnicodeSyntax,
   flagSpec "UnliftedFFITypes"                 Opt_UnliftedFFITypes,
@@ -3491,6 +3493,7 @@ glasgowExtsFlags = [
            , Opt_TypeOperators
            , Opt_TypeSynonymInstances
            , Opt_UnboxedTuples
+           , Opt_UnboxedSums
            , Opt_UnicodeSyntax
            , Opt_UnliftedFFITypes ]
 
