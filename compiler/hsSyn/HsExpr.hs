@@ -200,7 +200,7 @@ data HsExpr id
   | HsSum Int    -- Alternative (0-based)
           Arity  -- Sum arity
           (LHsExpr id)
-          PostTc id [Type]   -- the type arguments
+          (PostTc id [Type])   -- the type arguments
 
 
   -- | - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnCase',
