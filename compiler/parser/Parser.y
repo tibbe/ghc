@@ -1697,8 +1697,9 @@ comma_types1    :: { [LHsType RdrName] }  -- One or more:  ty,ty,ty
                                           >> return ($1 : $3) }
 
 bar_types2    :: { [LHsType RdrName] }  -- Two or more:  ty|ty|ty
-        : ctype  '|' ctype             { [$1,$3] }
-        | ctype  '|' bar_types2        {% addAnnotation (gl $1) AnnBar (gl $2)
+        : ctype  '|' ctype             {% addAnnotation (gl $1) AnnVbar (gl $2)
+                                          >> return [$1,$3] }
+        | ctype  '|' bar_types2        {% addAnnotation (gl $1) AnnVbar (gl $2)
                                           >> return ($1 : $3) }
 
 tv_bndrs :: { [LHsTyVarBndr RdrName] }
@@ -2398,7 +2399,7 @@ tup_exprs :: { Either (Int, Int, LHsExpr RdrName) [LHsTupArg RdrName] }
                            (Right (map (\l -> L l missingTupArg) (fst $1) ++ $2)) } }
 
            | bars texp bars0
-                {% do { mapM_ (\ll -> addAnnotation ll AnnBar ll) (fst $1)
+                {% do { mapM_ (\ll -> addAnnotation ll AnnVbar ll) (fst $1)
                       ; return (Left (snd $1, snd $1 + snd $3 + 1, $2)) } }
 
 -- Always starts with commas; always follows an expr

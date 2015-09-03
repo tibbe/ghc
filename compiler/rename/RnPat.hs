@@ -449,6 +449,10 @@ rnPatAndThen mk (TuplePat pats boxed _)
        ; pats' <- rnLPatsAndThen mk pats
        ; return (TuplePat pats' boxed []) }
 
+rnPatAndThen mk (SumPat pat alt arity _)
+  = do { pat' <- rnLPatAndThen mk pat
+       ; return (SumPat pat' alt arity placeHolderType) }
+
 rnPatAndThen mk (SplicePat splice)
   = do { eith <- liftCpsFV $ rnSplicePat splice
        ; case eith of   -- See Note [rnSplicePat] in RnSplice

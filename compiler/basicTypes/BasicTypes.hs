@@ -49,6 +49,8 @@ module BasicTypes(
         TupleSort(..), tupleSortBoxity, boxityTupleSort,
         tupleParens,
 
+        sumParens, pprAlternative,
+
         -- ** The OneShotInfo type
         OneShotInfo(..),
         noOneShotInfo, hasNoOneShotInfo, isOneShotInfo,
@@ -99,6 +101,7 @@ import SrcLoc ( Located,unLoc )
 import StaticFlags( opt_PprStyle_Debug )
 import Data.Data hiding (Fixity)
 import Data.Function (on)
+import Data.List (intersperse)
 import GHC.Exts (Any)
 
 {-
@@ -606,6 +609,28 @@ tupleParens UnboxedTuple    p = ptext (sLit "(#") <+> p <+> ptext (sLit "#)")
 tupleParens ConstraintTuple p   -- In debug-style write (% Eq a, Ord b %)
   | opt_PprStyle_Debug        = ptext (sLit "(%") <+> p <+> ptext (sLit "%)")
   | otherwise                 = parens p
+
+{-
+************************************************************************
+*                                                                      *
+                Sums
+*                                                                      *
+************************************************************************
+-}
+
+sumParens :: SDoc -> SDoc
+sumParens p = ptext (sLit "(#") <+> p <+> ptext (sLit "#)")
+
+-- | Pretty print an alternative in an unboxed sum e.g. "| a | |".
+pprAlternative :: (a -> SDoc) -- ^ The pretty printing function to use
+               -> a           -- ^ The things to be pretty printed
+               -> Int         -- ^ Alternative (zero-based)
+               -> Int         -- ^ Arity
+               -> SDoc        -- ^ 'SDoc' where the alternative havs been pretty
+                              -- printed and finally packed into a paragraph.
+pprAlternative pp x alt arity =
+    fsep (intersperse bar (replicate alt empty) ++ [pp x] ++
+          (replicate (arity - alt - 1) empty))
 
 {-
 ************************************************************************

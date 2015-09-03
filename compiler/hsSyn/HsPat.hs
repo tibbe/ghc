@@ -89,7 +89,7 @@ data Pat id
 
     -- For details on above see note [Api annotations] in ApiAnnotation
 
-        ------------ Lists, tuples, arrays ---------------
+        ------------ Lists, tuples, sums, arrays ---------------
   | ListPat     [LPat id]                            -- Syntactic list
                 (PostTc id Type)                     -- The type of the elements
                 (Maybe (PostTc id Type, SyntaxExpr id)) -- For rebindable syntax
@@ -123,6 +123,15 @@ data Pat id
     -- ^ - 'ApiAnnotation.AnnKeywordId' :
     --            'ApiAnnotation.AnnOpen' @'('@ or @'(#'@,
     --            'ApiAnnotation.AnnClose' @')'@ or  @'#)'@
+
+  | SumPat      (LPat id)        -- ^ Sum sub-pattern
+                Int              -- ^ Alternative (zero-based)
+                Arity            -- ^ Arity
+                (PostTc id Type) -- ^ placeholder before typechecker, filled in afterwards
+                                 -- with the types of the alternative
+    -- ^ - 'ApiAnnotation.AnnKeywordId' :
+    --            'ApiAnnotation.AnnOpen' @'(#'@,
+    --            'ApiAnnotation.AnnClose' @'#)'@
 
     -- For details on above see note [Api annotations] in ApiAnnotation
   | PArrPat     [LPat id]               -- Syntactic parallel array
@@ -329,6 +338,7 @@ pprPat (SigPatOut pat ty)     = ppr pat <+> dcolon <+> ppr ty
 pprPat (ListPat pats _ _)     = brackets (interpp'SP pats)
 pprPat (PArrPat pats _)       = paBrackets (interpp'SP pats)
 pprPat (TuplePat pats bx _)   = tupleParens (boxityTupleSort bx) (pprWithCommas ppr pats)
+pprPat (SumPat pat alt arity _) = sumParens (pprAlternative ppr pat alt arity)
 pprPat (ConPatIn con details) = pprUserCon (unLoc con) details
 pprPat (ConPatOut { pat_con = con, pat_tvs = tvs, pat_dicts = dicts,
                     pat_binds = binds, pat_args = details })
@@ -424,6 +434,7 @@ isStrictLPat :: LPat id -> Bool
 isStrictLPat (L _ (ParPat p))             = isStrictLPat p
 isStrictLPat (L _ (BangPat {}))           = True
 isStrictLPat (L _ (TuplePat _ Unboxed _)) = True
+isStrictLPat (L _ (SumPat _ _ _ _))       = True
 isStrictLPat _                            = False
 
 isStrictHsBind :: HsBind id -> Bool
@@ -445,6 +456,7 @@ looksLazyLPat (L _ (ParPat p))             = looksLazyLPat p
 looksLazyLPat (L _ (AsPat _ p))            = looksLazyLPat p
 looksLazyLPat (L _ (BangPat {}))           = False
 looksLazyLPat (L _ (TuplePat _ Unboxed _)) = False
+looksLazyLPat (L _ (SumPat _ _ _ _))         = False
 looksLazyLPat (L _ (VarPat {}))            = False
 looksLazyLPat (L _ (WildPat {}))           = False
 looksLazyLPat _                            = True
@@ -474,6 +486,7 @@ isIrrefutableHsPat pat
     go1 (SigPatIn pat _)    = go pat
     go1 (SigPatOut pat _)   = go pat
     go1 (TuplePat pats _ _) = all go pats
+    go1 (SumPat pat _ _  _) = go pat
     go1 (ListPat {}) = False
     go1 (PArrPat {})        = False     -- ?
 
@@ -512,6 +525,7 @@ hsPatNeedsParens (BangPat {})        = False
 hsPatNeedsParens (ParPat {})         = False
 hsPatNeedsParens (AsPat {})          = False
 hsPatNeedsParens (TuplePat {})       = False
+hsPatNeedsParens (SumPat {})         = False
 hsPatNeedsParens (ListPat {})        = False
 hsPatNeedsParens (PArrPat {})        = False
 hsPatNeedsParens (LitPat {})         = False

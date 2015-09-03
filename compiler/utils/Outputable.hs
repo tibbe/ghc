@@ -520,6 +520,7 @@ quotes d =
 semi, comma, colon, equals, space, dcolon, underscore, dot :: SDoc
 arrow, larrow, darrow, arrowt, larrowt, arrowtt, larrowtt :: SDoc
 lparen, rparen, lbrack, rbrack, lbrace, rbrace, blankLine :: SDoc
+bar :: SDoc
 
 blankLine  = docToSDoc $ Pretty.ptext (sLit "")
 dcolon     = unicodeSyntax (char '∷') (docToSDoc $ Pretty.ptext (sLit "::"))

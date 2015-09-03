@@ -633,6 +633,13 @@ tc_pat penv (TuplePat pats boxity _) pat_ty thing_inside
           return (mkHsWrapPat coi possibly_mangled_result pat_ty, res)
         }
 
+tc_pat penv (SumPat pat alt arity _) pat_ty thing_inside
+  = do  { let tc = sumTyCon arity
+        ; (coi, [arg_ty]) <- matchExpectedPatTy (matchExpectedTyConAppR tc) pat_ty
+        ; (pat', res) <- tc_lpat pat arg_ty penv thing_inside
+        ; return (mkHsWrapPat coi (SumPat pat' alt arity arg_ty) pat_ty, res)
+        }
+
 ------------------------
 -- Data constructors
 tc_pat penv (ConPatIn con arg_pats) pat_ty thing_inside
