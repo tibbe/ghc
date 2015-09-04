@@ -389,7 +389,7 @@ getSymtabName _ncu _dict symtab bh = do
           where tag = chr (fromIntegral ((i .&. 0x3FC00000) `shiftR` 22))
                 ix = fromIntegral i .&. 0x003FFFFF
         0x80000000 -> case i .&. 0x20000000 of
-            0 -> return $! case thing_tag of
+            0x00000000 -> return $! case thing_tag of
                 0 -> tyConName (tupleTyCon sort arity)
                 1 -> dataConName dc
                 2 -> idName (dataConWorkId dc)
@@ -402,7 +402,7 @@ getSymtabName _ncu _dict symtab bh = do
                          _ -> pprPanic "getSymtabName:unknown tuple sort" (ppr i)
                 thing_tag = (i .&. 0x06FFFFFF) `shiftR` 25
                 arity = fromIntegral (i .&. 0x01FFFFFF)
-            1 -> return $! case thing of
+            0x20000000 -> return $! case thing of
                 0 -> tyConName $ sumTyCon arity
                   where arity = fromIntegral (i .&. 0x0FFFFFFF)
                 1 -> dataConName $ sumDataCon alt arity
