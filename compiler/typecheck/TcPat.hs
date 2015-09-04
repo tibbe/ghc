@@ -51,6 +51,7 @@ import Outputable
 import FastString
 import Maybes( orElse )
 import Control.Monad
+import ListSetOps
 
 {-
 ************************************************************************
@@ -634,9 +635,10 @@ tc_pat penv (TuplePat pats boxity _) pat_ty thing_inside
         }
 
 tc_pat penv (SumPat pat alt arity _) pat_ty thing_inside
-  = do  { (coi, arg_ty) <- matchExpectedPatTy (matchExpectedSumTyR alt arity) pat_ty
-        ; (pat', res) <- tc_lpat pat arg_ty penv thing_inside
-        ; return (mkHsWrapPat coi (SumPat pat' alt arity arg_ty) pat_ty, res)
+  = do  { let tc = sumTyCon arity
+        ; (coi, arg_tys) <- matchExpectedPatTy (matchExpectedTyConAppR tc) pat_ty
+        ; (pat', res) <- tc_lpat pat (arg_tys `getNth` alt) penv thing_inside
+        ; return (mkHsWrapPat coi (SumPat pat' alt arity arg_tys) pat_ty, res)
         }
 
 ------------------------
@@ -942,8 +944,6 @@ matchExpectedPArrTyR :: TcRhoType -> TcM (TcCoercionR, TcRhoType)
 matchExpectedPArrTyR = downgrade matchExpectedPArrTy
 matchExpectedTyConAppR :: TyCon -> TcRhoType -> TcM (TcCoercionR, [TcSigmaType])
 matchExpectedTyConAppR tc = downgrade (matchExpectedTyConApp tc)
-matchExpectedSumTyR :: Int -> Int -> TcRhoType -> TcM (TcCoercionR, TcRhoType)
-matchExpectedSumTyR alt arity = downgrade (matchExpectedSumTy alt arity)
 
 ----------------------------
 matchExpectedPatTy :: (TcRhoType -> TcM (TcCoercionR, a))

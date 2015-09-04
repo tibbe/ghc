@@ -729,8 +729,8 @@ tidy_pat (TuplePat ps boxity tys)
   where
     arity = length ps
 
-tidy_pat (SumPat pat alt arity ty)
-  = unLoc $ mkPrefixConPat (sumDataCon alt arity) [tidy_lpat pat] [ty]
+tidy_pat (SumPat pat alt arity tys)
+  = unLoc $ mkPrefixConPat (sumDataCon alt arity) [tidy_lpat pat] tys
 
 tidy_pat (NPat (L _ lit) mb_neg eq) = tidyNPat tidy_lit_pat lit mb_neg eq
 tidy_pat (LitPat lit)         = tidy_lit_pat lit

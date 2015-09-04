@@ -636,7 +636,7 @@ mk_sum arity = (tycon, sum_cons)
 
     tyvars = take arity openAlphaTyVars
 
-    sum_cons = listArray (0,mAX_SUM_SIZE) [sum_con i | i <- [0..arity-1]]
+    sum_cons = listArray (0,arity-1) [sum_con i | i <- [0..arity-1]]
     sum_con i = let dc = pcDataCon dc_name tyvars tyvar_tys tycon
                     dc_name = mkWiredInName gHC_PRIM
                                             (mkSumDataConOcc i arity)
