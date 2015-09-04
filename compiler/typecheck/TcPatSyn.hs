@@ -487,6 +487,7 @@ tcCheckPatSynPat = go
     go1   (PArrPat pats _)    = mapM_ go pats
     go1   (ListPat pats _ _)  = mapM_ go pats
     go1   (TuplePat pats _ _) = mapM_ go pats
+    go1   (SumPat pat _ _ _)  = go pat
     go1   LitPat{}            = return ()
     go1   NPat{}              = return ()
     go1   (SigPatIn pat _)    = go pat

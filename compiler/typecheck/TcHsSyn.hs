@@ -1081,6 +1081,11 @@ zonk_pat env (TuplePat pats boxed tys)
         ; (env', pats') <- zonkPats env pats
         ; return (env', TuplePat pats' boxed tys') }
 
+zonk_pat env (SumPat pat alt arity ty)
+  = do  { ty' <- zonkTcTypeToType env ty
+        ; (env', pat') <- zonkPat env pat
+        ; return (env', SumPat pat' alt arity ty') }
+
 zonk_pat env p@(ConPatOut { pat_arg_tys = tys, pat_tvs = tyvars
                           , pat_dicts = evs, pat_binds = binds
                           , pat_args = args, pat_wrap = wrapper })

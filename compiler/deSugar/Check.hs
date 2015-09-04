@@ -143,6 +143,7 @@ untidy b (L loc p) = L loc (untidy' b p)
     untidy' b (ConPatIn name ps)     = pars b (L loc (ConPatIn name (untidy_con ps)))
     untidy' _ (ListPat pats ty Nothing)     = ListPat (map untidy_no_pars pats) ty Nothing
     untidy' _ (TuplePat pats box tys) = TuplePat (map untidy_no_pars pats) box tys
+    untidy' _ (SumPat pat alt arity ty) = SumPat (untidy_no_pars pat) alt arity ty
     untidy' _ (ListPat _ _ (Just _)) = panic "Check.untidy: Overloaded ListPat"
     untidy' _ (PArrPat _ _)          = panic "Check.untidy: Shouldn't get a parallel array here!"
     untidy' _ (SigPatIn _ _)         = panic "Check.untidy: SigPat"
@@ -727,6 +728,9 @@ tidy_pat (TuplePat ps boxity tys)
                            (map tidy_lpat ps) tys
   where
     arity = length ps
+
+tidy_pat (SumPat pat alt arity ty)
+  = unLoc $ mkPrefixConPat (sumDataCon alt arity) [tidy_lpat pat] [ty]
 
 tidy_pat (NPat (L _ lit) mb_neg eq) = tidyNPat tidy_lit_pat lit mb_neg eq
 tidy_pat (LitPat lit)         = tidy_lit_pat lit
