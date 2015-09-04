@@ -48,6 +48,7 @@ import FastString
 import Pair
 import Util
 import ErrUtils
+import DataCon (dataConRepArgTys)
 
 {-
 The guts of the simplifier is in this module, but the driver loop for
@@ -2096,7 +2097,8 @@ simplAlt env scrut' _ case_bndr' cont' (LitAlt lit, bndrs, rhs)
         ; return (LitAlt lit, [], rhs') }
 
 simplAlt env scrut' _ case_bndr' cont' (DataAlt con, vs, rhs)
-  = do  {       -- Deal with the pattern-bound variables
+  = pprTrace "simplAlt: dataConRepArgTys: " (ppr $ dataConRepArgTys con) $
+    do  {       -- Deal with the pattern-bound variables
                 -- Mark the ones that are in ! positions in the
                 -- data constructor as certainly-evaluated.
                 -- NB: simplLamBinders preserves this eval info

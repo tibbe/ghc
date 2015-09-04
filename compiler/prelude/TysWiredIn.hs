@@ -413,7 +413,8 @@ isBuiltInOcc_maybe occ
         "[::]"           -> Just parrTyConName
         "()"             -> tup_name Boxed      0
         "(##)"           -> tup_name Unboxed    0
-        '(':'#':' ':'|':' ':rest -> parse_sum 2 rest
+        '(':'#':'|':rest -> parse_sum 2 rest
+        '(':'#':'_':rest -> parse_sum_dc 0 2 rest
         '(':',':rest     -> parse_tuple Boxed   2 rest
         '(':'#':',':rest -> parse_tuple Unboxed 2 rest
         _other           -> Nothing
@@ -425,13 +426,16 @@ isBuiltInOcc_maybe occ
       | tail_matches sort rest  = tup_name sort n
       | otherwise               = Nothing
 
-    -- TODO: Parse "_"
     parse_sum n rest
-      | (' ':'|':' ' : rest2) <- rest = parse_sum (n+1) rest2
-      | ('#':')':'_' : rest2) <- rest, [(alt, "")] <- reads rest2 =
-            Just $ getName (sumDataCon alt n)
-      | "#)" <- rest                  = Just $ getName (sumTyCon n)
-      | otherwise                     = Nothing
+      | ('|' : rest2) <- rest = parse_sum (n+1) rest2
+      | ('_' : rest2) <- rest = parse_sum_dc (n-1) n rest2
+      | "#)" <- rest          = Just $ getName (sumTyCon n)
+      | otherwise             = Nothing
+
+    parse_sum_dc i n rest
+      | ('|' : rest2) <- rest = parse_sum_dc i (n+1) rest2
+      | "#)" <- rest          = Just $ getName (sumDataCon i n)
+      | otherwise             = Nothing
 
     tail_matches Boxed   ")" = True
     tail_matches Unboxed "#)" = True
@@ -589,16 +593,16 @@ mkSumTyConOcc :: Arity -> OccName
 mkSumTyConOcc n = mkOccName tcName str
   where
     -- No need to cache these, the caching is done in mk_sum
-    str = '(' : '#' : bars ++ " #)"
-    bars = concat $ replicate (n-1) " |"
+    str = '(' : '#' : bars ++ "#)"
+    bars = concat $ replicate (n-1) "|"
 
 -- | OccName for i-th alternative of n-ary unboxed sum data constructor.
 mkSumDataConOcc :: AltIx -> Arity -> OccName
 mkSumDataConOcc alt n = mkOccName dataName str
   where
     -- No need to cache these, the caching is done in mk_sum
-    str = '(' : '#' : bars alt ++ " _" ++ bars (n - alt - 1) ++ " #)"
-    bars i = concat $ replicate i " |"
+    str = '(' : '#' : bars alt ++ "_" ++ bars (n - alt - 1) ++ "#)"
+    bars i = concat $ replicate i "|"
 
 -- | Type constructor for n-ary unboxed sum.
 sumTyCon :: Arity -> TyCon
@@ -637,7 +641,7 @@ mk_sum arity = (tycon, sum_cons)
     tyvars = take arity openAlphaTyVars
 
     sum_cons = listArray (0,arity-1) [sum_con i | i <- [0..arity-1]]
-    sum_con i = let dc = pcDataCon dc_name tyvars tyvar_tys tycon
+    sum_con i = let dc = pcDataCon dc_name tyvars [(tyvar_tys !! i)] tycon
                     dc_name = mkWiredInName gHC_PRIM
                                             (mkSumDataConOcc i arity)
                                             (dc_uniq i)
