@@ -100,7 +100,7 @@ module Type (
         coreView, tcView,
 
         UnaryType, RepType(..), flattenRepType, repType,
-        tyConsOfType,
+        tyConsOfType, flattenSumRepType,
 
         -- * Type representation for the code generator
         typePrimRep, typeRepArity,
@@ -176,8 +176,11 @@ import Outputable
 import FastString
 
 import Maybes           ( orElse )
+import Data.List        ( foldl' )
 import Data.Maybe       ( isJust )
 import Control.Monad    ( guard )
+
+import qualified Data.Map.Strict as Map
 
 infixr 3 `mkFunTy`      -- Associates to the right
 
@@ -643,11 +646,47 @@ thunk and a function takes a nullary unboxed tuple as an argument!
 type UnaryType = Type
 
 data RepType = UbxTupleRep [UnaryType] -- INVARIANT: never an empty list (see Note [Nullary unboxed tuple])
+             | UbxSumRep [UnaryType]
              | UnaryRep UnaryType
 
 flattenRepType :: RepType -> [UnaryType]
 flattenRepType (UbxTupleRep tys) = tys
+flattenRepType (UbxSumRep tys)   = tys
 flattenRepType (UnaryRep ty)     = [ty]
+
+-- | Compute the representation type for unboxed sums. We represent
+-- sums as a tag followed by a number of pointer and non-pointer
+-- fields. The number of such fields is picked such that they can
+-- represent any of the alternatives. This means that some of the
+-- fields might not always be used.
+flattenSumRepType :: [[UnaryType]] -> [UnaryType]
+flattenSumRepType tyss =
+    wordPrimTy : concatMap replicateTypes
+    (Map.assocs (Map.unionsWith max (map countRepTypes tyss)))
+  where
+    countRepTypes :: [UnaryType] -> Map.Map PrimRep Int
+    countRepTypes = foldl' incRepType Map.empty
+
+    incRepType :: Map.Map PrimRep Int -> UnaryType -> Map.Map PrimRep Int
+    incRepType m ty = Map.insertWith (+) (typePrimRep ty) 1 m
+
+    replicateTypes :: (PrimRep, Int) -> [UnaryType]
+    replicateTypes (repTy, n) = replicate n (sumRepType repTy)
+
+    -- Pick some arbitrary 'UnaryType' that has the right
+    -- representation in the code generator.
+    sumRepType :: PrimRep -> UnaryType
+    sumRepType rep = case rep of
+        VoidRep          -> voidPrimTy
+        PtrRep           -> anyTy
+        IntRep           -> intPrimTy
+        WordRep          -> wordPrimTy
+        Int64Rep         -> int64PrimTy
+        Word64Rep        -> word64PrimTy
+        AddrRep          -> addrPrimTy
+        FloatRep         -> floatPrimTy
+        DoubleRep        -> doublePrimTy
+        rep@(VecRep _ _) -> pprPanic "TODO: handle vector types" (ppr rep)
 
 -- | Looks through:
 --
@@ -680,6 +719,9 @@ repType ty
          then UnaryRep voidPrimTy -- See Note [Nullary unboxed tuple]
          else UbxTupleRep (concatMap (flattenRepType . go rec_nts) tys)
 
+      | isUnboxedSumTyCon tc
+      = UbxSumRep (flattenSumRepType (map (flattenRepType . go rec_nts) tys))
+
     go _ ty = UnaryRep ty
 
 
@@ -710,6 +752,7 @@ typePrimRep :: UnaryType -> PrimRep
 typePrimRep ty
   = case repType ty of
       UbxTupleRep _ -> pprPanic "typePrimRep: UbxTupleRep" (ppr ty)
+      UbxSumRep _   -> pprPanic "typePrimRep: UbxSumRep" (ppr ty)
       UnaryRep rep -> case rep of
         TyConApp tc _ -> tyConPrimRep tc
         FunTy _ _     -> PtrRep

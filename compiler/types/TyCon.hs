@@ -956,7 +956,7 @@ data PrimRep
   | FloatRep
   | DoubleRep
   | VecRep Int PrimElemRep  -- ^ A vector
-  deriving( Eq, Show )
+  deriving( Eq, Ord, Show )
 
 data PrimElemRep
   = Int8ElemRep
@@ -969,7 +969,7 @@ data PrimElemRep
   | Word64ElemRep
   | FloatElemRep
   | DoubleElemRep
-   deriving( Eq, Show )
+   deriving( Eq, Ord, Show )
 
 instance Outputable PrimRep where
   ppr r = text (show r)
