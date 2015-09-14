@@ -63,7 +63,8 @@ ubxTupleId0 = dataConWorkId (tupleDataCon Unboxed 0)
 
 unarise :: UniqSupply -> [StgBinding] -> [StgBinding]
 unarise us binds = pprTrace "unarise" (ppr binds) $
-                   zipWith (\us -> unariseBinding us init_env) (listSplitUniqSupply us) binds
+                   let res = zipWith (\us -> unariseBinding us init_env) (listSplitUniqSupply us) binds
+                   in pprTrace "post-unarise:" (ppr res) res
   where -- See Note [Nullary unboxed tuple] in Type.hs
         init_env = unitVarEnv ubxTupleId0 [realWorldPrimId]
 
@@ -92,6 +93,14 @@ unariseExpr _ rho (StgApp f args)
     StgConApp (tupleDataCon Unboxed (length tys))
               (map StgVarArg (unariseId rho f))
 
+  | null args
+  , UbxSumRep tys <- repType (idType f)
+  =  -- Particularly important where (##) is concerned
+     -- See Note [Nullary unboxed tuple]
+    --pprTrace "unariseExpr: StgApp" (ppr rho $$ ppr f $$ ppr args)
+    StgConApp (sumDataCon 0 (length tys))  -- TODO
+              (map StgVarArg (unariseId rho f))
+
   | otherwise
   = StgApp f (unariseArgs rho args)
 
@@ -100,6 +109,7 @@ unariseExpr _ _ (StgLit l)
 
 unariseExpr _ rho (StgConApp dc args)
   | isUnboxedTupleCon dc = StgConApp (tupleDataCon Unboxed (length args')) args'
+  | isUnboxedSumCon dc   = StgConApp (sumDataCon (dataConTag dc - 1) (length args')) args'
   | otherwise            = StgConApp dc args'
   where
     args' = unariseArgs rho args
@@ -136,8 +146,8 @@ unariseExpr us rho (StgTick tick e)
 
 ------------------------
 unariseAlts :: UniqSupply -> UnariseEnv -> AltType -> Id -> RepType -> [StgAlt] -> (AltType, [StgAlt])
-unariseAlts us rho alt_ty bndr rep_ty alts
-    | pprTrace "unariseAlts" (ppr rho $$ ppr alt_ty $$ ppr bndr $$ ppr alts) False = undefined
+-- unariseAlts us rho alt_ty bndr rep_ty alts
+--     | pprTrace "unariseAlts" (ppr rho $$ ppr alt_ty $$ ppr bndr $$ ppr alts) False = undefined
 
 unariseAlts us rho alt_ty _ (UnaryRep _) alts
   = (alt_ty, zipWith (\us alt -> unariseAlt us rho alt) (listSplitUniqSupply us) alts)

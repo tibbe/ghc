@@ -534,6 +534,9 @@ chooseReturnBndrs bndr (PrimAlt _) _alts
 chooseReturnBndrs _bndr (UbxTupAlt _) [(_, ids, _, _)]
   = nonVoidIds ids      -- 'bndr' is not assigned!
 
+chooseReturnBndrs bndr (UbxSumAlt _) _alts
+  = nonVoidIds [bndr]      -- 'bndr' is assigned!  -- TODO
+
 chooseReturnBndrs bndr (AlgAlt _) _alts
   = nonVoidIds [bndr]   -- Only 'bndr' is assigned
 

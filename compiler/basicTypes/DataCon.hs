@@ -41,6 +41,7 @@ module DataCon (
         isNullarySrcDataCon, isNullaryRepDataCon, isTupleDataCon, isUnboxedTupleCon,
         isVanillaDataCon, classDataCon, dataConCannotMatch,
         isBanged, isMarkedStrict, eqHsBang, isSrcStrict, isSrcUnpacked,
+        isUnboxedSumCon,
 
         -- ** Promotion related functions
         promoteKind, promoteDataCon, promoteDataCon_maybe
@@ -1038,6 +1039,9 @@ isTupleDataCon (MkData {dcRepTyCon = tc}) = isTupleTyCon tc
 
 isUnboxedTupleCon :: DataCon -> Bool
 isUnboxedTupleCon (MkData {dcRepTyCon = tc}) = isUnboxedTupleTyCon tc
+
+isUnboxedSumCon :: DataCon -> Bool
+isUnboxedSumCon (MkData {dcRepTyCon = tc}) = isUnboxedSumTyCon tc
 
 -- | Vanilla 'DataCon's are those that are nice boring Haskell 98 constructors
 isVanillaDataCon :: DataCon -> Bool
